@@ -118,7 +118,86 @@ Every decision with a number behind it. Updated at the end of each phase.
 
 ## Phase 3 — Dataset + Splits + Training Notebook
 
-(To be filled)
+### D-P3-01 OSS Repository Chosen
+**Choice:** `pandas-dev/pandas`
+**Why:**
+- >20 000 closed issues as of May 2026 — large enough for a meaningful train/val/test split with balanced classes
+- Maintainers apply structured labels that map cleanly onto the four target classes (see D-P3-02)
+- Actively maintained since 2009; issues span a wide date range, enabling a clean time-based split without data leakage
+- Highly popular project — issues are well-formed (title + body), reducing noise vs. less active repos
+
+### D-P3-02 Label Mapping (pandas labels → {bug, feature, docs, question})
+Priority order when an issue carries multiple mapped labels: **bug > feature > docs > question**.
+Issues with no mappable label are discarded entirely (not assigned a fallback class).
+
+| pandas label(s) | Mapped class |
+|---|---|
+| `Bug`, `Regression`, `Crash` | `bug` |
+| `Enhancement`, `New Feature`, `Performance`, `Refactor` | `feature` |
+| `Docs`, `Documentation` | `docs` |
+| `Question`, `Usage Question` | `question` |
+
+**Unmapped labels (discarded):** `Good First Issue`, `Help Wanted`, `Needs Discussion`,
+`Needs Info`, `Needs Triage`, `Typing`, `Testing`, `CI`, `Code Style`, `API Design`,
+`Deprecation`, `Duplicate`, `Invalid`, `Wontfix`, `Contributor Experience`.
+
+**Rationale for priority order:** Bugs carry the highest triage urgency; a bug+docs issue is a bug
+that also needs a docs fix. Feature vs. docs is separated by whether the request changes behaviour
+(feature) or text only (docs). Questions are lowest priority because they are informational and do
+not drive engineering work.
+
+### D-P3-03 Split Strategy
+**Method:** Time-based split on `closed_at` (not random). Issues are sorted ascending by close date.
+**Why time-based:** Avoids leaking future knowledge into the training set; mirrors real deployment
+where the classifier sees issues newer than anything it was trained on. Random splits would allow
+the model to memorise recurring phrases across time.
+**`random_state=42` usage:** Used only inside the training notebook for DataLoader shuffling; the
+split boundaries themselves are deterministic time boundaries.
+
+**Fractions (applied to all labeled issues, most-recent-last order):**
+
+| Split | Fraction | Purpose |
+|---|---|---|
+| Train | ~63% (oldest) | Fine-tune DistilBERT and classical baseline |
+| Val | 12% | Hyperparameter tuning + early stopping |
+| Test | 15% | Final held-out evaluation; feeds CI gate |
+| RAG corpus | 10% (newest) | Dense retrieval index; excluded from classifier splits |
+
+**Time boundary invariant (validated by `split_issues.py`):**
+`max(train.closed_at) < min(val.closed_at) < min(test.closed_at) < min(rag.closed_at)`
+
+### D-P3-04 RAG Corpus Exclusion Rationale
+The 10% most-recent issues are reserved for the RAG retrieval index and **excluded** from the
+classifier train/val/test splits.
+**Why exclude:** The RAG corpus is retrieved at inference time. Including those issues in the
+classifier training set would give the model implicit access to "future" patterns during training —
+inflating val/test metrics and undermining the CI gate as a leakage detector. Keeping the corpus
+strictly newer than test also means the retriever indexes information the classifier has never seen,
+which better reflects the production scenario (new issues arrive daily).
+
+### D-P3-05 JSONL Schema per Row
+```json
+{"id": 12345, "text": "TITLE\n\nBODY", "label": "bug", "closed_at": "2023-01-15T10:23:00Z", "split": "train"}
+```
+- `text` concatenates title and body with `\n\n` — standard for sequence-classification fine-tuning
+- `label` is one of `bug | feature | docs | question`
+- `closed_at` is the raw ISO 8601 string from the GitHub API (UTC, `Z` suffix)
+- `split` field is included in every row for traceability when rows are later merged
+
+### D-P3-06 DistilBERT Freeze Policy
+**Freeze:** All DistilBERT layers **except** the final transformer block (layer index 5 of 6) and
+the classification head.
+**Why one block:** Unfreezing only the last block (~7M/66M params) is enough to adapt the
+task-specific representation while keeping training time under 20 min on Colab T4. Unfreezing all
+6 blocks risks catastrophic forgetting of general language representations given ~10k–15k training
+examples.
+**Hyperparameters:** lr=2e-5, batch=32, epochs=5, optimizer=AdamW, weight_decay=0.01,
+warmup_steps=500
+**Why lr=2e-5:** Standard fine-tuning rate for BERT-family models; higher rates cause instability
+with partially frozen weights.
+**Why warmup_steps=500:** At batch=32 and ~10k examples → ~312 steps/epoch; 500 warmup steps
+covers ~1.6 epochs, giving the classifier head time to stabilise before the unfrozen transformer
+block adjusts.
 
 ## Phase 4 — Fine-Tuned Classifier + Model Card
 
