@@ -1,0 +1,66 @@
+# Environment
+.env
+.env.local
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (for widget)
+node_modules/
+dist/
+build/
+
+# Docker
+.docker/
+
+# MinIO/local storage
+data/
+
+# Reference docs (study material, not artifacts)
+docs/_references/
+
+# Pre-commit
+.pre-commit-config.yaml.bak
+
+# Security
+*.pem
+*.key
+credentials.json
