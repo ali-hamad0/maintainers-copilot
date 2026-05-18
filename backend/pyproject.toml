@@ -34,6 +34,7 @@ dependencies = [
     "langsmith==0.1.14",
     "cachetools==5.3.2",
     "pyyaml==6.0.1",
+    "scikit-learn==1.4.0",
 ]
 
 [project.optional-dependencies]
@@ -89,7 +90,7 @@ warn_unused_ignores = true
 warn_no_return = true
 
 [[tool.mypy.overrides]]
-module = ["structlog.*", "langsmith.*", "google.*", "redis.*"]
+module = ["structlog.*", "langsmith.*", "google.*", "redis.*", "sklearn.*", "minio.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
