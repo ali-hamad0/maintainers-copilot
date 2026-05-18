@@ -9,11 +9,11 @@ Run `python backend/scripts/split_issues.py` to populate real counts.
 
 | Class | Train | Val | Test | RAG corpus | Notes |
 |---|---|---|---|---|---|
-| `bug` | TBD | TBD | TBD | TBD | Regression + Crash labels mapped here |
-| `feature` | TBD | TBD | TBD | TBD | Enhancement + Performance + Refactor |
-| `docs` | TBD | TBD | TBD | TBD | Docs + Documentation |
-| `question` | TBD | TBD | TBD | TBD | Question + Usage Question |
-| **Total** | **TBD** | **TBD** | **TBD** | **TBD** | Rows with no mappable label discarded |
+| `bug` | 828 (63.4%) | 138 (55.4%) | 185 (59.5%) | 124 (59.6%) | Regression + Crash labels mapped here |
+| `feature` | 208 (15.9%) | 67 (26.9%) | 51 (16.4%) | 51 (24.5%) | Enhancement + Performance + Refactor |
+| `docs` | 216 (16.5%) | 39 (15.7%) | 74 (23.8%) | 25 (12.0%) | Docs + Documentation |
+| `question` | 55 (4.2%) | 5 (2.0%) | 1 (0.3%) | 8 (3.8%) | Question + Usage Question |
+| **Total** | **1307** | **249** | **311** | **208** | 379 discarded (no mappable label) |
 
 Split fractions (time-based, not random): train ~63%, val 12%, test 15%, rag 10%.
 Time-order invariant: `max(train.closed_at) < min(val.closed_at) < min(test.closed_at) < min(rag.closed_at)`.

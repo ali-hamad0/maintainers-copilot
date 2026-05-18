@@ -175,6 +175,10 @@ async def _fetch_all_issues(
                 file=sys.stderr,
             )
             response = await client.get(url, params=params)
+            if response.status_code == 422:
+                # GitHub REST API hard-caps offset-based pagination at 10 000 items.
+                print("[github] hit GitHub 10k pagination cap — stopping.", file=sys.stderr)
+                break
             response.raise_for_status()
             batch: list[dict[str, Any]] = response.json()
 
