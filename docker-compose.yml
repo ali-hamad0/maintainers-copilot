@@ -1,0 +1,194 @@
+services:
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${DB_NAME:-maintainers_copilot}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-maintainers_copilot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  vault:
+    image: hashicorp/vault:1.15
+    command: server -dev -dev-root-token-id=${VAULT_ROOT_TOKEN:-dev-root-token}
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_ROOT_TOKEN:-dev-root-token}
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    ports:
+      - "${VAULT_PORT:-8200}:8200"
+    cap_add:
+      - IPC_LOCK
+    healthcheck:
+      test: ["CMD", "vault", "status", "-address=http://localhost:8200"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  vault-bootstrap:
+    image: hashicorp/vault:1.15
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_ROOT_TOKEN:-dev-root-token}
+    volumes:
+      - ./scripts/vault-bootstrap.sh:/vault-bootstrap.sh:ro
+    command: sh /vault-bootstrap.sh
+    depends_on:
+      vault:
+        condition: service_healthy
+    restart: "no"
+
+  # ── Migrations (one-shot, must complete before api starts) ──────────────────
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: alembic upgrade head
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_ROOT_TOKEN: ${VAULT_ROOT_TOKEN:-dev-root-token}
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-postgres}
+      DB_NAME: ${DB_NAME:-maintainers_copilot}
+      # migrate uses direct DATABASE_URL so it doesn't depend on Vault reading the secret
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/${DB_NAME:-maintainers_copilot}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      TRACING_BACKEND: ${TRACING_BACKEND:-langsmith}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-maintainers-copilot}
+    depends_on:
+      db:
+        condition: service_healthy
+      vault-bootstrap:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # ── Application services ─────────────────────────────────────────────────────
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_ROOT_TOKEN: ${VAULT_ROOT_TOKEN:-dev-root-token}
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-postgres}
+      DB_NAME: ${DB_NAME:-maintainers_copilot}
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_BUCKET: ${MINIO_BUCKET:-maintainers-copilot}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-gemini-embedding-001}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-768}
+      TRACING_BACKEND: ${TRACING_BACKEND:-langsmith}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-maintainers-copilot}
+      MODELSERVER_BASE_URL: http://modelserver:8001
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      vault-bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  modelserver:
+    build:
+      context: ./modelserver
+      dockerfile: Dockerfile
+    ports:
+      - "${MODELSERVER_PORT:-8001}:8001"
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_ROOT_TOKEN: ${VAULT_ROOT_TOKEN:-dev-root-token}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      vault-bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8001/healthz').raise_for_status()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  chatbot:
+    build:
+      context: ./chatbot
+      dockerfile: Dockerfile
+    ports:
+      - "${CHATBOT_PORT:-8501}:8501"
+    environment:
+      API_BASE_URL: http://api:8000
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    depends_on:
+      api:
+        condition: service_healthy
+
+  widget:
+    build:
+      context: ./widget
+      dockerfile: Dockerfile
+    ports:
+      - "${WIDGET_PORT:-3000}:3000"
+
+  host:
+    build:
+      context: ./host
+      dockerfile: Dockerfile
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+
+volumes:
+  db_data:
+  minio_data:

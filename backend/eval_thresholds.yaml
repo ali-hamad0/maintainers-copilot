@@ -1,0 +1,13 @@
+# eval_thresholds.yaml
+# Committed thresholds for both eval suites.  Setting any value to 0 or "disabled"
+# causes the api to refuse to boot (CLAUDE.md §4 #5).
+# All values are minimum acceptable metrics on the golden test set.
+
+classification:
+  accuracy: 0.70          # Phase 7 gate — must beat this or CI fails
+  f1_macro: 0.65          # weighted average across bug/feature/docs/question
+
+rag:
+  hit_at_5: 0.70          # fraction of questions where correct chunk is in top-5
+  faithfulness: 0.75      # answer grounded in retrieved context
+  answer_relevance: 0.70  # answer addresses the question

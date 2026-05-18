@@ -51,6 +51,9 @@ build/
 # Docker
 .docker/
 
+# structlog output
+logs/
+
 # MinIO/local storage
 data/
 
