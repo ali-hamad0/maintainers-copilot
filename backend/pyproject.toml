@@ -1,0 +1,95 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "maintainers-copilot-backend"
+version = "0.1.0"
+description = "FastAPI backend for Maintainer's Copilot"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Author", email = "author@example.com" }]
+
+dependencies = [
+    "fastapi[standard]==0.109.0",
+    "sqlalchemy[asyncio]==2.0.23",
+    "asyncpg==0.29.0",
+    "pydantic==2.5.2",
+    "pydantic-settings==2.1.0",
+    "python-dotenv==1.0.0",
+    "httpx==0.25.2",
+    "tenacity==8.2.3",
+    "structlog==23.3.0",
+    "uvicorn[standard]==0.27.0",
+    "fastapi-users[sqlalchemy,redis]==12.1.2",
+    "python-jose[cryptography]==3.3.0",
+    "passlib[bcrypt]==1.7.4",
+    "alembic==1.13.1",
+    "pgvector==0.2.1",
+    "psycopg[binary]==3.17.6",
+    "redis==5.0.1",
+    "minio==7.2.3",
+    "google-genai==0.3.0",
+    "langsmith==0.1.14",
+    "cachetools==5.3.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==7.4.3",
+    "pytest-asyncio==0.21.1",
+    "pytest-cov==4.1.0",
+    "ruff==0.1.8",
+    "black==23.12.1",
+    "isort==5.13.2",
+    "mypy==1.7.1",
+    "types-redis==4.6.0.11",
+    "types-requests==2.31.0.10",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_glob = ["*/migrations/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "ARG", "RUF"
+]
+ignore = ["E501"]
+
+[tool.ruff.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+disallow_untyped_calls = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+
+[[tool.mypy.overrides]]
+module = "alembic.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "structlog.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-v --cov=app --cov-report=html --cov-report=term-missing"
