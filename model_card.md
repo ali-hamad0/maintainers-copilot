@@ -1,0 +1,108 @@
+# Model Card — Maintainer's Copilot Issue Classifier
+
+## Model
+
+- **Architecture:** `distilbert-base-uncased` with a sequence-classification head on the `[CLS]` token
+- **Task:** 4-class GitHub issue triage — `bug` / `feature` / `docs` / `question`
+- **Parameter count:** ~66 M (base) + 4-class head (~3 K)
+- **Library:** HuggingFace `transformers` — `DistilBertForSequenceClassification`
+
+## Dataset
+
+- **Source:** `pandas-dev/pandas` closed GitHub issues (via REST API)
+- **Label mapping:** See `DECISIONS.md` §D-P3-02 for full mapping table
+- **Filtering:** Issues with no label mappable to the four target classes are discarded
+- **Input format:** `"TITLE\n\nBODY"` (body may be empty), truncated to 128 tokens
+
+## Splits
+
+| Split | Fraction | Purpose |
+|---|---|---|
+| Train | ~63% (oldest) | Fine-tune weights |
+| Val | 12% | Early stopping, hyperparameter tuning |
+| Test | 15% | Final evaluation; CI gate threshold |
+| RAG corpus | 10% (newest) | Dense retrieval index; excluded from classifier splits |
+
+**Split strategy:** Time-based — sorted by `closed_at` ascending. No random shuffling of boundaries.
+See `DECISIONS.md` §D-P3-03 for the rationale.
+
+### SHA-256 Hashes
+
+| Split | SHA-256 |
+|---|---|
+| `train` | `TBD — run backend/scripts/split_issues.py` |
+| `val` | `TBD — run backend/scripts/split_issues.py` |
+| `test` | `TBD — run backend/scripts/split_issues.py` |
+| `rag_corpus` | `TBD — run backend/scripts/split_issues.py` |
+
+## Architecture
+
+```
+DistilBertModel (6 transformer blocks)
+  └── pre_classifier  (Linear 768 → 768, ReLU)
+  └── classifier      (Linear 768 → 4)
+  └── dropout
+```
+
+Input token IDs and attention mask from tokenizer (max_length=128).
+The `[CLS]` token representation after the final transformer block is passed to the head.
+
+## Freeze Policy
+
+All DistilBERT parameters are **frozen** except:
+- Transformer block 5 (index 5 of 6, zero-indexed) — the final block
+- `pre_classifier` + `classifier` + `dropout` in the head
+
+**Rationale:** Unfreezing only the last block (~7 M / 66 M params) lets the model adapt the
+task-specific representation without catastrophic forgetting of general language knowledge,
+and keeps Colab T4 training under ~20 minutes. See `DECISIONS.md` §D-P3-06.
+
+## Hyperparameters
+
+| Parameter | Value | Rationale |
+|---|---|---|
+| `max_length` | 128 | Covers >95% of issue title+body pairs at this token budget |
+| `batch_size` | 32 | Fits T4 16 GB VRAM with gradient checkpointing off |
+| `epochs` | 5 | Empirically sufficient for DistilBERT fine-tuning at this scale |
+| `optimizer` | AdamW | Standard for transformer fine-tuning |
+| `learning_rate` | 2e-5 | BERT-family sweet spot; avoids instability with partial freeze |
+| `weight_decay` | 0.01 | Light regularisation |
+| `warmup_steps` | 500 | ~1.6 epochs at batch=32, ~10k train examples; stabilises head first |
+| `scheduler` | Linear decay with warmup | Reduces LR to 0 by end of training |
+| `random_state` | 42 | DataLoader shuffle seed only — split boundaries are time-based |
+
+## Label Encoding
+
+| Class | Label ID |
+|---|---|
+| `bug` | 0 |
+| `feature` | 1 |
+| `docs` | 2 |
+| `question` | 3 |
+
+## Training Hardware
+
+- **Platform:** Google Colab free tier
+- **GPU:** T4 (16 GB VRAM)
+- **Estimated training time:** ~15–20 minutes per run
+
+## Weights
+
+- **MinIO path:** `models/classifier/weights.pt`
+- **Weights SHA-256:** TBD — filled by `notebooks/train_classifier.ipynb` Cell 14
+- **Run ID:** TBD — filled by `notebooks/train_classifier.ipynb` Cell 14
+
+## Evaluation Thresholds (CI gate)
+
+Defined in `backend/eval_thresholds.yaml`:
+
+| Metric | Threshold |
+|---|---|
+| `classification.accuracy` | 0.70 |
+| `classification.f1_macro` | 0.65 |
+
+## Limitations
+
+- Trained on pandas-specific issues; may under-perform on other OSS repos without fine-tuning
+- Bodies longer than 128 tokens are truncated; very detailed bug reports may lose tail context
+- Labels are maintainer-applied; noisy labels in the source repo propagate into training data
