@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Demo Host — Maintainer's Copilot</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 860px;
+        margin: 60px auto;
+        padding: 0 24px;
+        color: #222;
+      }
+      h1 { font-size: 2rem; margin-bottom: 0.25em; }
+      p { color: #555; line-height: 1.6; }
+      code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+    </style>
+  </head>
+  <body>
+    <h1>Maintainer's Copilot — Demo Host</h1>
+    <p>
+      This page simulates an external host site that embeds the Copilot widget.
+      The widget is served from <code>http://localhost:3000</code> and will appear
+      in the bottom-right corner once it is allowed by the CORS origin allowlist
+      stored in Postgres.
+    </p>
+    <p>
+      To test origin blocking: load this page from a host <em>not</em> in
+      <code>widget_config.allowed_origins</code> and confirm the widget is blocked
+      in the browser console.
+    </p>
+
+    <!-- Widget embed: replace src with the actual bundle URL from the widget service -->
+    <script>
+      window.__COPILOT_API_BASE__ = "http://localhost:8000";
+    </script>
+    <script type="module" src="http://localhost:3000/src/main.jsx"></script>
+  </body>
+</html>

@@ -1,10 +1,21 @@
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
+from fastapi import Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+log = structlog.get_logger(__name__)
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with AsyncSession() as session:
+def _get_session_maker(request: Request) -> async_sessionmaker[AsyncSession]:
+    engine = request.app.state.db_engine
+    return async_sessionmaker(engine, expire_on_commit=False)
+
+
+async def get_db(
+    session_maker: async_sessionmaker[AsyncSession] = Depends(_get_session_maker),
+) -> AsyncGenerator[AsyncSession, None]:
+    async with session_maker() as session:
         try:
             yield session
         finally:

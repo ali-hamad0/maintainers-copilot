@@ -81,7 +81,40 @@ Every decision with a number behind it. Updated at the end of each phase.
 
 ## Phase 2 — Compose Stack + Vault + Migrate + Tracing Wired
 
-(To be filled)
+### D-P2-01 Vault Secret Paths
+**Paths:** `secret/jwt`, `secret/db`, `secret/minio`, `secret/tracing`, `secret/gemini`, `secret/openai`, `secret/anthropic`
+**KV version:** 2 (supports versioning + metadata)
+**Why v2:** Enables secret versioning and soft-delete; no performance penalty for dev mode
+
+### D-P2-02 Migrate Container Strategy
+**Choice:** Separate `migrate` one-shot container that runs `alembic upgrade head` and exits 0
+**Why separate:** If migrations run inside `api`'s entrypoint, a failed migration kills the running server and makes the error harder to surface. A separate container exits with a clear code; docker-compose `depends_on: condition: service_completed_successfully` blocks `api` until migrations are clean. "Just delete the volume" is not a strategy.
+
+### D-P2-03 Alembic Driver
+**Choice:** asyncpg for both the app engine and Alembic migrations (via `asyncio.run(run_migrations_online())`)
+**Why:** Keeps one driver in the image; no need for psycopg2/psycopg3 as a separate dep just for migrations. Alembic 1.13+ async support is stable.
+
+### D-P2-04 HNSW Parameters (confirmed D-09)
+**m=16, ef_construction=64** — pgvector defaults; good recall/build-time tradeoff at 768 dim.
+**Benchmark:** Phase 8 will measure hit@5 and tune if needed. IVFFlat rejected: requires training (`IVFFLAT_LISTS`) and query-time `SET ivfflat.probes`; HNSW needs neither.
+
+### D-P2-05 structlog Renderer
+**Prod (json):** `JSONRenderer` — machine-parseable, Datadog/CloudWatch compatible
+**Dev (json or key-value):** `ConsoleRenderer` when `LOG_FORMAT=dev` — human-readable for local development
+**Every log line carries:** `trace_id`, `request_id`, `user_id` (injected via structlog contextvars by middleware in Phase 12)
+
+### D-P2-06 LangSmith Tracing Configuration
+**How wired:** Vault reads `secret/tracing.api_key` → set `LANGCHAIN_API_KEY` + `LANGCHAIN_TRACING_V2=true` + `LANGCHAIN_PROJECT` at startup
+**Startup span:** `emit_startup_span()` decorated with `@traceable` emits one real span per boot — confirms the tracing pipeline end-to-end
+**Disabled gracefully:** If key is placeholder (`ls-placeholder-*`), tracing is skipped without crashing
+
+### D-P2-07 eval_thresholds.yaml Initial Values
+**classification.accuracy:** 0.70 (minimum for Phase 7 CI gate)
+**classification.f1_macro:** 0.65
+**rag.hit_at_5:** 0.70
+**rag.faithfulness:** 0.75
+**rag.answer_relevance:** 0.70
+**Why these numbers:** Conservative baselines that a fine-tuned distilbert + HNSW retrieval should exceed; tightened in Phase 7/10 after benchmarking.
 
 ## Phase 3 — Dataset + Splits + Training Notebook
 
