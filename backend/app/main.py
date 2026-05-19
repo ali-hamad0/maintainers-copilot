@@ -7,6 +7,8 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app import bootcheck
+from app.api.errors import register_exception_handlers
+from app.api.middleware import RequestIDMiddleware
 from app.config import get_settings
 from app.infra.embedder import Embedder
 from app.infra.logging_setup import configure_logging
@@ -109,6 +111,13 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    # Middleware runs outermost-first; RequestIDMiddleware must wrap everything
+    # so request_id is bound before any route or exception handler runs.
+    app.add_middleware(RequestIDMiddleware)
+
+    # Register the unified exception handler (CLAUDE.md §5 Errors).
+    register_exception_handlers(app)
 
     @app.get("/healthz", tags=["ops"])
     async def healthz() -> dict[str, str]:

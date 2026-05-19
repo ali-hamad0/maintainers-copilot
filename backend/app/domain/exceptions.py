@@ -37,3 +37,10 @@ class ToolFailure(AppError):
     def __init__(self, message: str, *, retryable: bool = False) -> None:
         super().__init__(message)
         self.retryable = retryable
+
+
+class ValidationFailure(AppError):
+    """Input failed domain-level validation after Pydantic parsing succeeded."""
+
+    status_code = 422
+    code = "validation_failure"
