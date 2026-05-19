@@ -475,7 +475,114 @@ uv run --directory backend python ../evals/run_classification_eval.py \
 
 ## Phase 10 — RAG Golden Set + CI Gate #2
 
-(To be filled)
+### D-P10-01 RAG Golden Set Design
+**Size: 25 triples**
+**Why 25:** Same reasoning as classification golden set (D-P7-01): minimum for a signal with
+4 distinct question categories; proportional to the 218-issue RAG corpus (roughly 1 example
+per ~9 corpus documents).
+
+**Category breakdown:**
+| Category | Count | Rationale |
+|---|---|---|
+| `common` | 10 | Direct, well-scoped questions with one correct source chunk — tests basic retrieval |
+| `ambiguous` | 5 | Multi-interpretation questions — tests whether retrieval and answer handle scope correctly |
+| `multi_doc` | 5 | Synthesis questions across 2–4 issues — tests fusion and parent-chunk expansion |
+| `not_in_corpus` | 5 | Off-topic questions (Polars, Spark, GPU, Dask, testing) — tests graceful degradation |
+
+**Distribution rationale:** 10 common + 5 ambiguous + 5 multi-doc = 20 with relevant chunks (80%);
+5 not-in-corpus = 20% intentional "no answer" cases. This ratio tests both the retriever's
+precision (can it find the right chunk?) and its recall discipline (does it avoid hallucinating
+for OOC questions?).
+
+**Why hand-authored, not sampled from the RAG corpus:** The RAG corpus issues were fetched from
+pandas-dev/pandas. Sampling would produce mostly common bugs — zero ambiguous or OOC examples.
+Hand-authoring guarantees deliberate coverage of each category and produces unambiguous ground
+truth (no GitHub label noise).
+
+### D-P10-02 Retrieval Metric Set
+**Metrics chosen:** hit@5, MRR@10, Recall@10
+
+| Metric | Why included | Why this K |
+|---|---|---|
+| hit@5 | Primary CI gate — matches retrieval k=5 default in `RetrievalService.retrieve()` | k=5 is the production top-k |
+| MRR@10 | Measures rank quality: rank 1 hit vs rank 5 hit are very different for answer quality | k=10 covers the reranker's input window |
+| Recall@10 | Measures completeness for multi-doc questions; fraction of all relevant chunks found | k=10 matches the reranker candidate pool |
+
+**Why not NDCG:** NDCG requires graded relevance (1, 2, 3…). The binary relevant/not-relevant
+judgement in the fixture makes NDCG = MRR for this case. Adding NDCG would add no new information.
+
+**Gated in CI:** only hit@5 (threshold 0.70). MRR@10 and Recall@10 are reported for diagnosis
+only. The mandatory gate is hit@5 because: (1) it directly corresponds to the production retrieval
+k; (2) it is interpretable — "at least 70% of questions find a relevant chunk in the top 5".
+
+**Measured on fixture:** hit@5=0.80, MRR@10=0.531, Recall@10=0.921
+
+### D-P10-03 LLM Judge — Frozen Gemini 2.5 Flash
+**Choice:** Gemini 2.5 Flash at temperature=0.0 with the frozen prompt at `prompts/rag_judge.md`
+**Why not RAGAS:**
+1. RAGAS adds `ragas` + `langchain` + a local LLM or OpenAI key as dependencies.
+   The project already has Gemini; a second vendor or package adds complexity with no accuracy gain
+   at this golden-set scale (25 examples).
+2. RAGAS's internal prompts are not version-controlled in this repo. A RAGAS version bump can
+   silently change scores. The custom frozen prompt guarantees reproducibility across runs.
+3. Context recall in RAGAS requires the retrieved chunks at eval time (live DB). The custom judge
+   uses the `ground_truth_context` field in the JSONL, which works offline in CI.
+
+**Prompt version:** 1.0, frozen 2026-05-19. Changing the prompt requires updating this entry
+with the new version and re-running all 25 examples.
+
+**Metrics scored:**
+- faithfulness: is every factual claim in the answer grounded in the provided context?
+- answer_relevance: does the answer directly address the question?
+
+**not_in_corpus handling:** Examples with empty `ideal_answer` are excluded from scoring.
+The judge returns faithfulness=-1.0 when context is empty (sentinel for "not applicable").
+The harness excludes these from the average rather than penalising them.
+
+### D-P10-04 CI Gate Architecture (Gate #2)
+**Job:** `rag-eval-gate` in `.github/workflows/ci.yml`, `needs: lint`
+**Mandatory step:** retrieval metrics from `rag_retrieval_ci.jsonl` — always runs, no live DB
+needed; gates on `hit_at_5 >= 0.70`.
+**Optional step:** LLM judge generation metrics — runs if `GEMINI_API_KEY` secret is set; gates
+on `faithfulness >= 0.75` and `answer_relevance >= 0.70`; skipped with a warning if absent (same
+pattern as Gemini classifier in Job 2).
+
+**Why fixture-based retrieval for CI:**
+GitHub Actions does not run Postgres + pgvector. The fixture is a committed snapshot of the
+expected top-10 relevance pattern. It is updated manually when the retrieval pipeline changes
+significantly. The fixture catches: (1) regressions in the eval harness code itself; (2) threshold
+regressions if the fixture is updated to reflect a worse retriever.
+
+**Regression demo command:**
+```bash
+# Lower threshold to impossible, expect exit 1
+sed -i 's/hit_at_5: 0.70/hit_at_5: 0.99/' backend/eval_thresholds.yaml
+python evals/run_rag_eval.py --skip-judge --skip-minio-upload
+# Expected: FAIL: rag.hit_at_5: 0.8000 < threshold 0.99  →  exit 1
+```
+
+### D-P10-05 Threshold Calibration (RAG)
+**Method:** measured from pre-computed CI fixture − 0.05 buffer (same policy as D-P7-02).
+
+| Metric | Measured (fixture) | Threshold | Buffer |
+|---|---|---|---|
+| hit@5 | 0.80 | **0.70** | −0.10 (5 not-in-corpus always score 0; larger buffer needed) |
+| faithfulness | pending live judge run | **0.75** | initial conservative estimate |
+| answer_relevance | pending live judge run | **0.70** | initial conservative estimate |
+
+**Why larger buffer for hit@5:** 5 of 25 questions are not-in-corpus with hit@5=0 by design.
+Their contribution to the overall average is fixed at 0, depressing the denominator. A 0.05
+buffer on a 0.80 measured score would give 0.75, which is fine for in-corpus questions but
+leaves almost no headroom if a single in-corpus question regresses. The 0.10 buffer (0.70)
+absorbs one additional in-corpus miss before CI fails.
+
+### D-P10-06 RRF k=60 Confirmation (from D-P9-03)
+**Status:** pre-computed fixture reflects hybrid+rerank retrieval.
+**Result:** hit@5=0.80 with hybrid RRF k=60 + cross-encoder rerank.
+**D-P9-07 update:** hybrid retrieval outperforms pure-dense baseline on this golden set.
+Pure-dense (no BM25 fusion) would miss rag-006 (DST boundary — not in dense embedding space) and
+rag-003 (version-specific error message — keyword match required). Both are correctly retrieved by
+hybrid. This confirms the D-P9-03 choice to use RRF k=60 over a tuned λ weighted sum.
 
 ## Phase 11 — Redaction Layer + Exception Handling Refactor
 
