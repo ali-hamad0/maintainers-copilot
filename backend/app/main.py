@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-import redis.asyncio as aioredis
+import redis.asyncio as aioredis  # type: ignore[import-untyped]
 import structlog
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine

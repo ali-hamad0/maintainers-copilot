@@ -25,10 +25,10 @@ from dotenv import load_dotenv
 from minio import Minio
 from minio.error import S3Error
 
-REPO_ROOT    = Path(__file__).parent.parent.parent
-WEIGHTS_DIR  = Path(__file__).parent.parent / "weights"
+REPO_ROOT = Path(__file__).parent.parent.parent
+WEIGHTS_DIR = Path(__file__).parent.parent / "weights"
 WEIGHTS_PATH = WEIGHTS_DIR / "weights.pt"
-MINIO_KEY    = "models/classifier/weights.pt"
+MINIO_KEY = "models/classifier/weights.pt"
 
 
 def main() -> None:
@@ -43,8 +43,8 @@ def main() -> None:
     WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
 
     endpoint = os.environ["MINIO_LOCAL_ENDPOINT"].removeprefix("http://").removeprefix("https://")
-    secure   = not (endpoint.startswith("localhost") or endpoint.startswith("127."))
-    client   = Minio(
+    secure = not (endpoint.startswith("localhost") or endpoint.startswith("127."))
+    client = Minio(
         endpoint,
         access_key=os.environ["MINIO_ACCESS_KEY"],
         secret_key=os.environ["MINIO_SECRET_KEY"],

@@ -24,8 +24,8 @@ CM = np.array(
     [
         [179, 5, 1, 0],  # true: bug
         [14, 37, 0, 0],  # true: feature
-        [8, 4, 62, 0],   # true: docs
-        [1, 0, 0, 0],    # true: question
+        [8, 4, 62, 0],  # true: docs
+        [1, 0, 0, 0],  # true: question
     ],
     dtype=int,
 )

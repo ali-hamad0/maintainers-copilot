@@ -24,11 +24,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from minio import Minio
-from minio.error import S3Error
 
-REPO_ROOT    = Path(__file__).parent.parent.parent
+REPO_ROOT = Path(__file__).parent.parent.parent
 WEIGHTS_PATH = Path(__file__).parent.parent / "weights" / "weights.pt"
-MINIO_KEY    = "models/classifier/weights.pt"
+MINIO_KEY = "models/classifier/weights.pt"
 
 
 def main() -> None:
@@ -48,14 +47,14 @@ def main() -> None:
         )
         sys.exit(1)
 
-    weights_bytes  = WEIGHTS_PATH.read_bytes()
+    weights_bytes = WEIGHTS_PATH.read_bytes()
     weights_sha256 = hashlib.sha256(weights_bytes).hexdigest()
     print(f"SHA-256: {weights_sha256}")
     print(f"Size   : {len(weights_bytes) / 1e6:.1f} MB")
 
     endpoint = os.environ["MINIO_LOCAL_ENDPOINT"].removeprefix("http://").removeprefix("https://")
-    secure   = not (endpoint.startswith("localhost") or endpoint.startswith("127."))
-    client   = Minio(
+    secure = not (endpoint.startswith("localhost") or endpoint.startswith("127."))
+    client = Minio(
         endpoint,
         access_key=os.environ["MINIO_ACCESS_KEY"],
         secret_key=os.environ["MINIO_SECRET_KEY"],

@@ -48,9 +48,9 @@ SPLIT_PREFIX = "splits/v1"
 
 # Split fractions — applied to ALL labeled issues sorted by closed_at ascending.
 # Oldest chunk → train; newest chunk → rag_corpus.
-FRAC_RAG = 0.10   # newest 10%
+FRAC_RAG = 0.10  # newest 10%
 FRAC_TEST = 0.15  # next 15% (second newest)
-FRAC_VAL = 0.12   # next 12%
+FRAC_VAL = 0.12  # next 12%
 # train gets the remainder (~63%)
 
 # ---------------------------------------------------------------------------
