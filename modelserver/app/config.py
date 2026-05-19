@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # (only safe before training is complete).
     weights_sha256: str = Field(default="")
 
+    # ── Gemini (for summarise endpoint) ─────────────────────────────────────────
+    # Empty string = API key not configured; summarise endpoint returns fallback.
+    gemini_api_key: str = Field(default="")
+
     log_level: str = Field(default="INFO")
     log_format: str = Field(default="json")
 

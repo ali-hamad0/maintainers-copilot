@@ -24,6 +24,9 @@ from transformers import DistilBertTokenizerFast, DistilBertConfig; \
 DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased'); \
 DistilBertConfig.from_pretrained('distilbert-base-uncased')"
 
+# Download spaCy en_core_web_sm (~12 MB) for the NER endpoint.
+RUN python3 -m spacy download en_core_web_sm
+
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:8001/healthz').raise_for_status()"
 

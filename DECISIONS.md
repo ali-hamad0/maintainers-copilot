@@ -304,7 +304,42 @@ DistilBERT and Gemini re-eval requires modelserver running + API key; pre-augmen
 
 ## Phase 6 — NER + Summariser Endpoints
 
-(To be filled)
+### D-P6-01 Summariser Strategy: LLM-driven vs Pre-trained
+**Choice: LLM-driven (Gemini 2.5 Flash via REST API)**
+
+| Option | Pros | Cons |
+|--------|------|------|
+| BART/T5 pre-trained | No API cost; no network dep | +400 MB Docker image; slow CPU inference (~2-5 s); mediocre on code-heavy text |
+| **Gemini 2.5 Flash** | State-of-the-art quality; no extra model weight; handles code/traceback vocabulary naturally | $0.075/1M input tokens; requires API key; ~2 s latency |
+
+**Why Gemini wins here:** The modelserver Docker image already weighs ~1.5 GB (PyTorch + DistilBERT). Adding a BART/T5 checkpoint (+400 MB) for worse quality is not justified. Gemini 2.5 Flash is already used for the LLM baseline, so the API integration pattern is established. Cost for summarisation at project scale (< 10k calls/day) is negligible.
+
+**Fallback:** If `GEMINI_API_KEY` is not set or the API call fails, the service returns the first 350 characters of the issue text. The caller always receives a non-empty `summary` field. The `fallback: true` flag in the response signals this to the consumer.
+
+**If the LLM provider has an outage:** The fallback truncation ensures the chatbot still has *something* to show the maintainer. No 500s are surfaced to the user. The `fallback` flag lets the UI indicate degraded mode.
+
+### D-P6-02 NER Strategy: spaCy + Regex
+**Choice: spaCy `en_core_web_sm` + regex pass for code-specific entities**
+
+spaCy provides standard NER (PERSON, ORG, PRODUCT, GPE) at ~12 MB with CPU inference. The regex pass adds four code-specific entity types that spaCy misses:
+
+| Label | Pattern | Example |
+|-------|---------|---------|
+| `FILE_PATH` | `word/word/file.ext` | `pandas/core/frame.py` |
+| `CODE_ENTITY` | backtick-quoted tokens | `` `pd.read_csv()` `` |
+| `ERROR_TYPE` | `TitleCase + Error/Exception/Warning` | `ValueError`, `KeyError` |
+| `VERSION` | `v?N.N(.N)?` | `2.0.0`, `v1.5.3` |
+
+**Graceful degradation:** If `en_core_web_sm` is not installed (local dev without `python -m spacy download`), the service falls back to regex-only extraction. All four code-specific labels are still returned; only standard NLP types (PERSON, ORG) are absent.
+
+**Inference cost:** spaCy CPU inference ~1-5 ms per issue; regex ~0.1 ms. Total NER latency is negligible vs the summarise endpoint.
+
+### D-P6-03 Prompt Location
+**Choice:** Prompt stored in `modelserver/prompts/summarise_issue.txt` (loaded by the service) AND mirrored in `prompts/summarise_issue.txt` (canonical repo-root location per CLAUDE.md §2).
+
+**Why the duplication:** The modelserver Dockerfile uses `COPY . .` from the `./modelserver` context, which excludes the repo-root `prompts/` directory. Rather than restructuring the Docker build context, the modelserver carries its own copy of its prompts in `modelserver/prompts/`. The repo-root `prompts/` serves as the canonical reference for code review and documentation purposes.
+
+**Why not env var / MinIO:** Prompt is versioned in git (changes tracked, reviewed in PRs). Loading from MinIO adds startup latency and a dependency. Env var would exceed line-length guidelines for a multi-line prompt.
 
 ## Phase 7 — Classification Golden Set + CI Gate #1
 
