@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app import bootcheck
+from app.api.auth_router import router as auth_router
 from app.api.errors import register_exception_handlers
 from app.api.middleware import RequestIDMiddleware
 from app.config import get_settings
@@ -118,6 +119,9 @@ def create_app() -> FastAPI:
 
     # Register the unified exception handler (CLAUDE.md §5 Errors).
     register_exception_handlers(app)
+
+    # Auth + Users routes (Phase 12).
+    app.include_router(auth_router)
 
     @app.get("/healthz", tags=["ops"])
     async def healthz() -> dict[str, str]:

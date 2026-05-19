@@ -1,22 +1,12 @@
-from collections.abc import AsyncGenerator
+"""Shared FastAPI dependencies.
 
-import structlog
-from fastapi import Depends, Request
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+get_db        — async DB session (re-exported from infra/database to keep
+                existing import paths working for routers and tests).
+require_role  — role-based access control factory (from infra/auth).
+current_active_user — active-user dependency (from infra/auth).
+"""
 
-log = structlog.get_logger(__name__)
+from app.infra.auth import current_active_user, require_role
+from app.infra.database import get_db
 
-
-def _get_session_maker(request: Request) -> async_sessionmaker[AsyncSession]:
-    engine = request.app.state.db_engine
-    return async_sessionmaker(engine, expire_on_commit=False)
-
-
-async def get_db(
-    session_maker: async_sessionmaker[AsyncSession] = Depends(_get_session_maker),
-) -> AsyncGenerator[AsyncSession, None]:
-    async with session_maker() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+__all__ = ["current_active_user", "get_db", "require_role"]
