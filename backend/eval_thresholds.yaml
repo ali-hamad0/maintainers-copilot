@@ -26,6 +26,11 @@ classification:
       f1_macro: 0.60      # Gemini test macro-F1 0.6888 pre-augmentation; re-eval pending
 
 rag:
-  hit_at_5: 0.70          # fraction of questions where correct chunk is in top-5
+  # Calibrated from pre-computed CI fixture (25-example golden set, 2026-05-19).
+  # Fixture measured: hit@5=0.80, MRR@10=0.531, Recall@10=0.921
+  # faithfulness / answer_relevance measured on ideal-answer golden set by
+  # Gemini 2.5 Flash judge (frozen prompt prompts/rag_judge.md v1.0).
+  # Thresholds = measured - 0.05 buffer (same policy as classification §D-P7-02).
+  hit_at_5: 0.70          # measured 0.80; threshold = actual - 0.10 (5 not-in-corpus always 0)
   faithfulness: 0.75      # answer grounded in retrieved context
   answer_relevance: 0.70  # answer addresses the question

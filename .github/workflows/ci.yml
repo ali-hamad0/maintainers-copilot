@@ -163,3 +163,143 @@ jobs:
           name: eval-report-${{ github.sha }}
           path: /tmp/eval_report.json
           if-no-files-found: warn
+
+  # --------------------------------------------------------------------------
+  # Job 3 — RAG golden-set eval gate
+  #
+  # Mandatory gate: retrieval metrics from the pre-computed CI fixture
+  # (no DB required).  hit@5 must meet eval_thresholds.yaml rag.hit_at_5.
+  #
+  # Optional gate: LLM judge generation metrics (faithfulness, answer_relevance)
+  # — only enforced if GEMINI_API_KEY secret is configured.  Skips gracefully
+  # if absent so CI does not block without API access.
+  #
+  # Regression demo (local):
+  #   1. Lower rag.hit_at_5 threshold to 0.99 in backend/eval_thresholds.yaml
+  #   2. python evals/run_rag_eval.py --skip-judge --skip-minio-upload
+  #   3. Observe exit code 1 with "FAIL: rag.hit_at_5: 0.8000 < threshold 0.99"
+  # --------------------------------------------------------------------------
+  rag-eval-gate:
+    name: RAG eval gate
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install --quiet uv
+
+      - name: Install backend dependencies (provides httpx, pyyaml)
+        working-directory: backend
+        run: uv sync --frozen
+
+      - name: Validate RAG golden set structure
+        working-directory: backend
+        run: |
+          uv run python - <<'EOF'
+          import json
+          from pathlib import Path
+
+          golden_path = Path("../evals/golden/rag.jsonl")
+          fixture_path = Path("../evals/fixtures/rag_retrieval_ci.jsonl")
+          valid_categories = {"common", "ambiguous", "multi_doc", "not_in_corpus"}
+
+          def load_jsonl(p):
+              rows = []
+              with p.open() as fh:
+                  for i, line in enumerate(fh, 1):
+                      line = line.strip()
+                      if line:
+                          rows.append((i, json.loads(line)))
+              return rows
+
+          golden_rows = load_jsonl(golden_path)
+          assert len(golden_rows) == 25, f"Expected 25 golden rows, got {len(golden_rows)}"
+          for i, row in golden_rows:
+              assert "id" in row, f"line {i}: missing 'id'"
+              assert "question" in row, f"line {i}: missing 'question'"
+              assert "ideal_answer" in row, f"line {i}: missing 'ideal_answer'"
+              assert "category" in row, f"line {i}: missing 'category'"
+              assert row["category"] in valid_categories, (
+                  f"line {i}: invalid category {row['category']!r}"
+              )
+              assert "n_relevant" in row, f"line {i}: missing 'n_relevant'"
+              assert isinstance(row["n_relevant"], int), f"line {i}: n_relevant must be int"
+              assert len(row["question"]) > 10, f"line {i}: question too short"
+
+          fixture_rows = load_jsonl(fixture_path)
+          assert len(fixture_rows) == 25, f"Expected 25 fixture rows, got {len(fixture_rows)}"
+          for i, row in fixture_rows:
+              assert "id" in row, f"line {i}: fixture missing 'id'"
+              rel = row.get("top_10_relevance", [])
+              assert len(rel) == 10, f"line {i}: top_10_relevance must have 10 entries"
+              assert all(isinstance(v, bool) for v in rel), (
+                  f"line {i}: top_10_relevance must be list of bool"
+              )
+
+          hand_labelled = [r for _, r in golden_rows if r.get("hand_labelled")]
+          assert len(hand_labelled) == 5, (
+              f"Expected 5 hand-labelled examples, got {len(hand_labelled)}"
+          )
+
+          from collections import Counter
+          cats = Counter(r["category"] for _, r in golden_rows)
+          print(f"Golden set OK: 25 examples  {dict(cats)}")
+          print(f"Fixture OK: 25 rows with top_10_relevance")
+          print(f"Hand-labelled: {len(hand_labelled)} examples")
+          EOF
+
+      - name: Validate threshold file (no zeros, no 'disabled') — RAG section
+        working-directory: backend
+        run: |
+          uv run python - <<'EOF'
+          import yaml
+          from pathlib import Path
+
+          thresholds = yaml.safe_load(Path("eval_thresholds.yaml").read_text())
+          rag = thresholds.get("rag", {})
+          assert rag, "Missing 'rag' section in eval_thresholds.yaml"
+
+          def walk(node, path=""):
+              if isinstance(node, dict):
+                  for k, v in node.items():
+                      walk(v, f"{path}.{k}" if path else k)
+              elif isinstance(node, (int, float)):
+                  assert node != 0, f"Threshold {path} = 0 (CLAUDE.md §4 #5)"
+              elif isinstance(node, str):
+                  assert node.lower() != "disabled", (
+                      f"Threshold {path} = 'disabled' (CLAUDE.md §4 #5)"
+                  )
+
+          walk(rag, "rag")
+          print(f"RAG threshold section OK: {rag}")
+          EOF
+
+      - name: Run RAG eval (retrieval fixture, skip judge if no API key)
+        working-directory: backend
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          SKIP_JUDGE=""
+          if [ -z "$GEMINI_API_KEY" ]; then
+            SKIP_JUDGE="--skip-judge"
+          fi
+
+          uv run python ../evals/run_rag_eval.py \
+            $SKIP_JUDGE \
+            --skip-minio-upload \
+            --report-path /tmp/rag_eval_report.json
+
+      - name: Upload RAG eval report as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-eval-report-${{ github.sha }}
+          path: /tmp/rag_eval_report.json
+          if-no-files-found: warn
