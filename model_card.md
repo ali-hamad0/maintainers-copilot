@@ -28,7 +28,7 @@ See `DECISIONS.md` §D-P3-03 for the rationale.
 
 ### SHA-256 Hashes
 
-| Split | SHA-256 |
+| Split | 527da66c84c29cb5eeefdbd72370535a4261e9f217c27bd348c13df22013aa63 |
 |---|---|
 | `train` | `ac5c246f9a9d7e063a08ef657e124519f998faea5010008baff9f28570f66283` |
 | `val` | `e761bd4f311ea8425e6a08a71025573c4e67b00d7e78883e238a8bf8fa0b1fcc` |
