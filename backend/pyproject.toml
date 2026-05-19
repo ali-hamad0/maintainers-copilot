@@ -74,6 +74,7 @@ ignore = [
     "E501",   # line-length enforced by black
     "B008",   # Depends() in FastAPI defaults is intentional
     "N818",   # CLAUDE.md prescribes PermissionDenied / ToolFailure names
+    "A003",   # `id` as class attribute is standard in SQLAlchemy / dataclasses
 ]
 
 [tool.ruff.lint.isort]

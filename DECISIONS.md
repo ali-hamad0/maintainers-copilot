@@ -410,7 +410,18 @@ uv run --directory backend python ../evals/run_classification_eval.py \
 
 ## Phase 8 — Corpus + Embeddings + Smart Chunking
 
-(To be filled)
+**D-P8-01 Embedding model: gemini-embedding-001**
+- **Choice:** `gemini-embedding-001` via Gemini REST API, 768 dimensions
+- **Why:** Already using Gemini for LLM and summariser; single API key, no additional dependency. `text-embedding-3-small` (OpenAI) would require a second API key and vendor. 768 dims matches existing pgvector column dimension locked at Phase 1.
+- **Cost:** ~$0.00 per million tokens (included in Gemini API free tier at current usage). Full corpus run: 218 issues × ~1000 chars avg × 8 children = ~1744 API calls, negligible cost.
+- **Alternative considered:** `bge-small-en-v1.5` (local HuggingFace, free, no GPU needed on this corpus size). Rejected because it adds a ~120 MB model dependency and requires Colab for large-scale re-embedding.
+
+**D-P8-02 Chunking strategy: parent-child with 256/2000 char split**
+- **Child size:** 256 chars — small enough for precise embedding retrieval; large enough to contain a coherent phrase or sentence.
+- **Overlap:** 32 chars — prevents context loss at chunk boundaries without duplicating too much.
+- **Parent size:** 2000 chars (full issue title+body) — gives the LLM full context when generating answers; parent is NOT embedded, only returned after child match.
+- **Dedup key:** SHA-256 of content — content-addressable, making ingest idempotent.
+- **Trade-off:** Storage is ~9× raw text (1 parent + ~8 children per issue). For 218 issues this is ~1962 rows — trivially small. At 10k issues, this strategy would need chunking the parent too.
 
 ## Phase 9 — Hybrid + Rerank + Query Transformation + Metadata Filters
 

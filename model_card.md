@@ -89,18 +89,18 @@ and keeps Colab T4 training under ~20 minutes. See `DECISIONS.md` §D-P3-06.
 ## Weights
 
 - **MinIO path:** `models/classifier/weights.pt`
-- **Weights SHA-256:** `527da66c84c29cb5eeefdbd72370535a4261e9f217c27bd348c13df22013aa63`
-- **Run ID:** `1f610ed8-b3a0-4a96-b301-5fe445813019`
+- **Weights SHA-256:** `c1e0b92e7a61f83445e70bb1ff55022a7fd2454d60f77847a9203b1e344bd394`
+- **Run ID:** `d5cbdb10-e5e8-4b0a-bce3-1bb229a52a30`
 - **Training duration:** ~18 minutes on Colab T4
 
-## Evaluation Results (final weights, run `1f610ed8`)
+## Evaluation Results (v2 weights — augmented split, 1373 train examples)
 
 | Split | Accuracy | Macro-F1 | Bug F1 | Feature F1 | Docs F1 | Question F1 |
 |---|---|---|---|---|---|---|
-| Val | 0.8755 | 0.6540 | 0.91 | 0.81 | 0.89 | 0.00 |
-| Test | 0.8939 | 0.6483 | 0.93 | 0.76 | 0.91 | 0.00 |
+| Val  | 0.8740 | 0.7334 | 0.91 | 0.81 | 0.88 | 0.33 |
+| Test | 0.9021 | 0.8893 | 0.93 | 0.74 | 0.91 | 0.98 |
 
-**Note:** `question` F1 = 0.00 on both splits due to severe class imbalance (55/1307 train = 4.2%, 1/311 test = 0.3%). The macro-F1 threshold is calibrated accordingly — see `DECISIONS.md` §D-P4-09.
+**Note:** v1 weights (SHA `527da66...`) trained on old split (1307 examples, question F1=0.00 due to 1 test question). Replaced by v2 after question-class augmentation added 25 issues with 2025-2026 dates. Val question F1=0.33 because val only has 5 question examples (recall=0.20).
 
 Confusion matrix: `evals/artefacts/confusion_matrix.png`
 

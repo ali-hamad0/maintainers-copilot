@@ -58,6 +58,10 @@ logs/
 data/
 backend/weights/
 
+# Local eval artefacts (uploaded to MinIO; not committed)
+backend/eval_report.json
+evals/artefacts/*.png
+
 # Reference docs (study material, not artifacts)
 docs/_references/
 

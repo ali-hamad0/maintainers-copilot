@@ -70,7 +70,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
     log.info("api.shutting_down")
-    await redis_pool.aclose()
+    await redis_pool.aclose()  # type: ignore[attr-defined]
     await engine.dispose()
     log.info("api.shutdown_complete")
 

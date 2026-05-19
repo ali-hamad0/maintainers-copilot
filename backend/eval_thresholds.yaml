@@ -19,8 +19,8 @@ classification:
       accuracy: 0.79      # CI-fixture measured 0.84 on 25-example golden set; threshold = actual - 0.05
       f1_macro: 0.77      # CI-fixture measured 0.8264; question F1 0.75 (3 golden examples)
     distilbert:
-      accuracy: 0.64      # DistilBERT test accuracy 0.8939 pre-augmentation; re-eval pending
-      f1_macro: 0.55      # DistilBERT test macro-F1 0.6483 pre-augmentation; re-eval pending
+      accuracy: 0.85      # v2 weights: test accuracy 0.9021 on augmented split; threshold = actual - 0.05
+      f1_macro: 0.83      # v2 weights: test macro-F1 0.8893; question F1 0.98; threshold = actual - 0.05
     gemini:
       accuracy: 0.68      # Gemini test accuracy 0.9357 pre-augmentation; re-eval pending
       f1_macro: 0.60      # Gemini test macro-F1 0.6888 pre-augmentation; re-eval pending
