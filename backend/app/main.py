@@ -8,9 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app import bootcheck
 from app.config import get_settings
+from app.infra.embedder import Embedder
 from app.infra.logging_setup import configure_logging
+from app.infra.reranker import Reranker
 from app.infra.tracing import configure_tracing, emit_startup_span
 from app.infra.vault import load_secrets
+from app.repositories.chunk_repo import ChunkRepo
+from app.services.retrieval import RetrievalService
 
 log = structlog.get_logger(__name__)
 
@@ -65,11 +69,34 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.redis = redis_pool
     log.info("redis.connected", url=settings.redis_url)
 
+    # 7. Embedder (Gemini REST; shared by ingest + retrieval).
+    embedder = Embedder(api_key=secrets.gemini_api_key)
+    app.state.embedder = embedder
+    log.info("embedder.attached", model=settings.embedding_model)
+
+    # 8. Reranker HTTP client → modelserver /v1/rerank.
+    reranker = Reranker(modelserver_base_url=settings.modelserver_base_url)
+    app.state.reranker = reranker
+
+    # 9. Retrieval service — single entry point for all RAG retrieval.
+    retrieval_svc = RetrievalService(
+        embedder=embedder,
+        reranker=reranker,
+        chunk_repo=ChunkRepo(),
+        gemini_api_key=secrets.gemini_api_key,
+        rrf_k=settings.hybrid_rrf_k,
+    )
+    app.state.retrieval = retrieval_svc
+    log.info("retrieval.service_ready", rrf_k=settings.hybrid_rrf_k)
+
     log.info("api.started")
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
     log.info("api.shutting_down")
+    await retrieval_svc.close()
+    await reranker.close()
+    await embedder.close()
     await redis_pool.aclose()  # type: ignore[attr-defined]
     await engine.dispose()
     log.info("api.shutdown_complete")

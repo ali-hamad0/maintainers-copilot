@@ -11,11 +11,13 @@ from fastapi import FastAPI
 
 from app.api.classify_router import router as classify_router
 from app.api.ner import router as ner_router
+from app.api.rerank import router as rerank_router
 from app.api.summarise import router as summarise_router
 from app.config import get_settings
 from app.infra.weight_loader import download_and_verify
 from app.services.classifier_service import ClassifierService
 from app.services.ner_service import NERService
+from app.services.rerank_service import RerankService
 from app.services.summarise_service import SummariseService
 
 log = structlog.get_logger(__name__)
@@ -67,6 +69,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     summariser = SummariseService(settings.gemini_api_key)
     app.state.summariser = summariser
 
+    # ── Reranker ──────────────────────────────────────────────────────────────
+    # CrossEncoder is CPU-only (~22 MB weights); downloaded from HuggingFace on
+    # first boot and cached locally.  Subsequent boots use the local cache.
+    log.info("modelserver.loading_reranker", model=settings.reranker_model)
+    reranker = RerankService(settings.reranker_model)
+    app.state.reranker = reranker
+    log.info("modelserver.reranker_ready", model=settings.reranker_model)
+
     log.info("modelserver.started")
     yield
 
@@ -85,6 +95,7 @@ def create_app() -> FastAPI:
 
     app.include_router(classify_router)
     app.include_router(ner_router)
+    app.include_router(rerank_router)
     app.include_router(summarise_router)
 
     @app.get("/healthz", tags=["ops"])

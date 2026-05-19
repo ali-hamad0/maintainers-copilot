@@ -425,7 +425,53 @@ uv run --directory backend python ../evals/run_classification_eval.py \
 
 ## Phase 9 — Hybrid + Rerank + Query Transformation + Metadata Filters
 
-(To be filled)
+### D-P9-01 Sparse Retrieval: Postgres ts_rank (BM25-style)
+**Choice:** Postgres `ts_rank` + `websearch_to_tsquery` on `chunks.content`
+**Why not a `bm25s` library:** The chunks table is already in Postgres; a separate BM25 index (e.g., `bm25s` or Elasticsearch) would add an extra service and ETL step with no accuracy gain at this corpus size (~1962 rows). Postgres `ts_rank` is a TF×IDF variant that behaves like BM25 for short queries on CPU.
+**Why `websearch_to_tsquery` over `to_tsquery`:** Handles arbitrary user input without raising a parse error (special characters, partial words, operators). `to_tsquery` would require sanitizing input first.
+**Index:** GIN index on `to_tsvector('english', content)` added in migration 0003 — avoids O(N) sequential scan.
+
+### D-P9-02 Dense Retrieval: pgvector cosine (HNSW)
+**Choice:** `embedding <=> CAST(:vec AS vector)` on the existing HNSW index (m=16, ef_construction=64)
+**Embedding:** HyDE-expanded query embedded with gemini-embedding-001 (768 dim)
+**Why HyDE on the dense path:** The query ("how does merge on index work?") lives in a different semantic space from the answer (a long issue thread). HyDE closes the gap by generating a plausible issue text and embedding that instead — dense recall improves on technical corpora where queries are short and documents are long.
+
+### D-P9-03 Hybrid Fusion: Reciprocal Rank Fusion (k=60)
+**Choice:** RRF over weighted sum
+**Formula:** `score(d) = Σ_i  1 / (60 + rank_i(d) + 1)` across sparse and dense lists
+**Why RRF over weighted sum:** Weighted sum requires tuning a λ parameter on held-out data; RRF is parameter-free (k=60 is the universally accepted default from Cormack et al. 2009) and is robust to score-scale differences between ts_rank and cosine similarity. The k=60 constant will be confirmed against the RAG golden set in Phase 10; if RRF@60 underperforms a tuned λ sum, the constant will be updated here.
+**Candidates:** 20 from each retriever → fused top-20 → passed to reranker.
+
+### D-P9-04 Cross-Encoder Reranker: ms-marco-MiniLM-L-6-v2 (local)
+**Choice:** Local `cross-encoder/ms-marco-MiniLM-L-6-v2` via sentence-transformers (22 MB weights)
+**Why local over Cohere Rerank API:**
+- No external API dependency (avoids quota exhaustion and billing)
+- MiniLM-L-6-v2 is trained on MS MARCO — generalises well to technical Q&A (GitHub issues)
+- 22 MB weights download on first modelserver boot; cached locally thereafter
+**Why not fatal latency:** Reranker scores only 20 candidates (not the full corpus). MiniLM-L-6-v2 CPU inference on 20 pairs: ~50–150 ms. Retrieval is not on the hot path of a typing loop; 150 ms is invisible for a triage tool.
+**Location:** Runs in the modelserver container (PyTorch/transformers already present). The backend API calls `modelserver:8001/v1/rerank` via HTTP — keeps the API image PyTorch-free.
+
+### D-P9-05 Query Transformation: HyDE (Hypothetical Document Embeddings)
+**Choice:** HyDE over multi-query rewrite
+**Why HyDE for this corpus:**
+- The corpus is GitHub issues (long, technical, concrete). Maintainer queries are short and abstract ("oauth login breaks after upgrade"). The vocabulary gap between query and document is high.
+- HyDE generates a plausible issue text that embeds in the *document* space, not the query space — closes the gap without needing multiple retrieval passes.
+- Multi-query rewrite generates N variants of the query and runs N retrievals, multiplying API calls. For a corpus of ~1962 chunks, N extra dense searches are wasteful.
+- HyDE trades 1 Gemini generation call (~$0.00006 at Flash pricing) for better dense recall.
+**Fallback:** If the Gemini call fails (network error, quota), the raw query is embedded instead. Retrieval continues in degraded mode; the sparse path is unaffected (sparse uses the original query, never the hypothesis).
+
+### D-P9-06 Metadata Filter Design
+**Whitelisted keys:** `doc_type`, `closed_at_gte`, `closed_at_lte`, `labels`
+**SQL mapping:**
+- `doc_type` → `chunks.doc_type = :value`
+- `closed_at_gte` → `chunks.doc_metadata->>'closed_at' >= :value`
+- `closed_at_lte` → `chunks.doc_metadata->>'closed_at' <= :value`
+- `labels` → `chunks.doc_metadata->'labels' @> jsonb_build_array(:value)` (JSONB array containment)
+**Safety:** Only whitelisted keys are accepted (ValueError on unknown keys). Values are always bound parameters — no string formatting of user-supplied values.
+
+### D-P9-07 Retrieval Metrics (to be measured in Phase 10)
+**Target:** hybrid RRF > pure dense on hit@5 on the 25-question RAG golden set.
+**Method:** Run three retrieval modes on the golden set: (a) dense only, (b) sparse only, (c) hybrid + rerank. Record hit@5 for each. Update this entry with the measured delta after Phase 10.
 
 ## Phase 10 — RAG Golden Set + CI Gate #2
 

@@ -26,6 +26,7 @@ dependencies = [
     "spacy==3.7.2",
     "structlog==23.3.0",
     "minio==7.2.3",
+    "sentence-transformers==2.7.0",
 ]
 
 [project.optional-dependencies]

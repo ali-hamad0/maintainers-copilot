@@ -1,4 +1,4 @@
-"""Chunk domain models for RAG corpus (Phase 8)."""
+"""Chunk domain models for RAG corpus (Phase 8 + 9)."""
 
 from __future__ import annotations
 
@@ -27,6 +27,15 @@ class ChunkRecord:
     content_hash: str
     metadata: ChunkMetadata
     embedding: list[float] | None = None  # populated in embed stage
+
+
+@dataclass
+class RetrievedChunk:
+    """A ranked retrieval result: child chunk matched + its parent for context."""
+
+    child: ChunkRecord
+    parent: ChunkRecord | None  # full issue text; None if parent not found
+    score: float  # cross-encoder score (higher = more relevant)
 
 
 @dataclass
