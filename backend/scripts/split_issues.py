@@ -169,12 +169,7 @@ def _boundary(total: int, frac: float) -> int:
 
 def _time_split(
     labeled: list[dict[str, Any]],
-) -> tuple[
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]],]:
     """
     Return (train, val, test, rag) slices.
 
