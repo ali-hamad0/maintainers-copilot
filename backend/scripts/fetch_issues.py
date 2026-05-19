@@ -170,8 +170,7 @@ async def _fetch_all_issues(
         while True:
             params["page"] = page
             print(
-                f"[github] fetching page {page} "
-                f"(collected {len(issues)} so far) …",
+                f"[github] fetching page {page} " f"(collected {len(issues)} so far) …",
                 file=sys.stderr,
             )
             response = await client.get(url, params=params)

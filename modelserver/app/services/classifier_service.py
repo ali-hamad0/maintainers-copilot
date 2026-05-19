@@ -12,7 +12,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import torch
-from transformers import DistilBertConfig, DistilBertForSequenceClassification, DistilBertTokenizerFast
+from transformers import (
+    DistilBertConfig,
+    DistilBertForSequenceClassification,
+    DistilBertTokenizerFast,
+)
 
 _MODEL_NAME = "distilbert-base-uncased"
 _MAX_LENGTH = 128

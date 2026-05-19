@@ -22,7 +22,7 @@ class ClassifyRequest(BaseModel):
 
 class ClassifyResponse(BaseModel):
     label: str = Field(description="Predicted class: bug | feature | docs | question")
-    score: float = Field(description="Confidence of the top prediction (0–1)")
+    score: float = Field(description="Confidence of the top prediction (0-1)")
     scores: dict[str, float] = Field(description="Softmax probabilities for all classes")
 
 
