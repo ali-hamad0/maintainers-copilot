@@ -43,7 +43,7 @@ class IngestService:
 
     # ── Stage 1: Load ────────────────────────────────────────────────────────
 
-    def _load(self) -> list[dict]:
+    def _load(self) -> list[dict[str, object]]:
         response = self._minio.get_object(self._bucket, _CORPUS_KEY)
         raw = response.read()
         issues = [json.loads(line) for line in raw.decode("utf-8").splitlines() if line.strip()]
@@ -60,11 +60,12 @@ class IngestService:
 
     # ── Stage 3: Chunk ───────────────────────────────────────────────────────
 
-    def _make_parent(self, issue: dict) -> ChunkRecord:
-        content = self._clean(issue.get("text") or "")[:_PARENT_MAX_CHARS]
+    def _make_parent(self, issue: dict[str, object]) -> ChunkRecord:
+        content = self._clean(str(issue.get("text") or ""))[:_PARENT_MAX_CHARS]
         doc_id = str(issue["id"])
         parent_id = uuid.uuid4()
-        label = issue.get("label", "")
+        label = str(issue.get("label") or "")
+        closed_at = str(issue["closed_at"]) if issue.get("closed_at") else None
         return ChunkRecord(
             id=parent_id,
             parent_id=None,
@@ -77,7 +78,7 @@ class IngestService:
                 doc_type="issue",
                 doc_id=doc_id,
                 chunk_role="parent",
-                closed_at=issue.get("closed_at"),
+                closed_at=closed_at,
                 labels=[label] if label else [],
             ),
         )

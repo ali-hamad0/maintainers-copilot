@@ -28,15 +28,15 @@ _BACKEND_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(_BACKEND_DIR))
 _REPO_ROOT = _BACKEND_DIR.parent
 
-import httpx
-import structlog
-from dotenv import load_dotenv
-from minio import Minio
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+import httpx  # noqa: E402
+import structlog  # noqa: E402
+from dotenv import load_dotenv  # noqa: E402
+from minio import Minio  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
 
-from app.infra.embedder import Embedder
-from app.services.ingest import IngestService
+from app.infra.embedder import Embedder  # noqa: E402
+from app.services.ingest import IngestService  # noqa: E402
 
 log = structlog.get_logger(__name__)
 
