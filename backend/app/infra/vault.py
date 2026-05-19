@@ -24,8 +24,6 @@ class VaultSecrets:
     minio_secret_key: str
     langsmith_api_key: str
     gemini_api_key: str
-    openai_api_key: str
-    anthropic_api_key: str
 
 
 async def _read_kv(
@@ -48,19 +46,6 @@ async def load_secrets(vault_addr: str, vault_token: str) -> VaultSecrets:
         tracing_data = await _read_kv(client, vault_addr, vault_token, "tracing")
         gemini_data = await _read_kv(client, vault_addr, vault_token, "gemini")
 
-        # openai and anthropic are optional placeholders; don't fail if missing
-        try:
-            openai_data = await _read_kv(client, vault_addr, vault_token, "openai")
-            openai_key: str = openai_data.get("api_key", "")
-        except (httpx.HTTPStatusError, KeyError):
-            openai_key = ""
-
-        try:
-            anthropic_data = await _read_kv(client, vault_addr, vault_token, "anthropic")
-            anthropic_key: str = anthropic_data.get("api_key", "")
-        except (httpx.HTTPStatusError, KeyError):
-            anthropic_key = ""
-
     secrets = VaultSecrets(
         jwt_secret=jwt_data["secret"],
         db_password=db_data["password"],
@@ -68,8 +53,6 @@ async def load_secrets(vault_addr: str, vault_token: str) -> VaultSecrets:
         minio_secret_key=minio_data["secret_key"],
         langsmith_api_key=tracing_data["api_key"],
         gemini_api_key=gemini_data["api_key"],
-        openai_api_key=openai_key,
-        anthropic_api_key=anthropic_key,
     )
     log.info("vault.secrets_loaded", paths=list(_REQUIRED_PATHS))
     return secrets

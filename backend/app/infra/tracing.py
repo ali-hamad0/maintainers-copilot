@@ -2,12 +2,19 @@
 
 configure_tracing() sets the env vars that langsmith reads automatically,
 then emits one startup span so the tracing UI shows a real trace on boot.
+
+sanitise_span_inputs() is the second redaction call site (CLAUDE.md §6).
+All code that builds explicit span metadata MUST pass it through this
+function before handing it to @traceable or RunTree.
 """
 
 import os
+from typing import Any
 
 import structlog
 from langsmith import traceable
+
+from app.infra.redaction import redact_dict
 
 log = structlog.get_logger(__name__)
 
@@ -25,6 +32,16 @@ def configure_tracing(api_key: str, project: str, enabled: bool = True) -> None:
     os.environ["LANGCHAIN_PROJECT"] = project
     os.environ["LANGSMITH_PROJECT"] = project
     log.info("tracing.configured", backend="langsmith", project=project)
+
+
+def sanitise_span_inputs(inputs: dict[str, Any]) -> dict[str, Any]:
+    """Redact secrets from span inputs before emitting to the tracing backend.
+
+    Call this on any dict you pass as explicit metadata or inputs to @traceable
+    or RunTree.  The structlog processor covers logs automatically; this covers
+    the tracing call site (second of THREE call sites — see redaction.py).
+    """
+    return redact_dict(inputs)
 
 
 @traceable(name="api.startup_health")

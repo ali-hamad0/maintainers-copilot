@@ -12,6 +12,8 @@ from pathlib import Path
 
 import structlog
 
+from app.infra.redaction import structlog_processor as _redact_processor
+
 
 def configure_logging(log_level: str, log_format: str, log_dir: str = "logs") -> None:
     level = getattr(logging, log_level.upper(), logging.INFO)
@@ -20,6 +22,8 @@ def configure_logging(log_level: str, log_format: str, log_dir: str = "logs") ->
     log_file = Path(log_dir) / "api.log"
 
     shared_processors: list[structlog.types.Processor] = [
+        # Redaction MUST be first — no secret can escape via any later processor.
+        _redact_processor,
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,

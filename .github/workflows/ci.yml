@@ -41,7 +41,38 @@ jobs:
         run: uv run mypy app/
 
   # --------------------------------------------------------------------------
-  # Job 2 — Classification golden-set eval gate
+  # Job 2 — Redaction layer tests
+  #
+  # Mandatory gate: every push must prove that secrets cannot leave the service
+  # boundary via logs, traces, or the memory write path.
+  # No external services required — pure-Python unit + integration tests.
+  # --------------------------------------------------------------------------
+  redaction-test:
+    name: Redaction layer tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install --quiet uv
+
+      - name: Install backend dependencies (including dev extras for pytest)
+        working-directory: backend
+        run: uv sync --frozen --extra dev
+
+      - name: Run redaction tests
+        working-directory: backend
+        run: uv run pytest tests/test_redaction.py -v --no-cov
+
+  # --------------------------------------------------------------------------
+  # Job 3 — Classification golden-set eval gate
   #
   # Runs TF-IDF+LR (retrained on the committed 40-example CI fixture) against
   # the 25-example golden set and fails if macro-F1 drops below the committed

@@ -82,7 +82,7 @@ Every decision with a number behind it. Updated at the end of each phase.
 ## Phase 2 — Compose Stack + Vault + Migrate + Tracing Wired
 
 ### D-P2-01 Vault Secret Paths
-**Paths:** `secret/jwt`, `secret/db`, `secret/minio`, `secret/tracing`, `secret/gemini`, `secret/openai`, `secret/anthropic`
+**Paths:** `secret/jwt`, `secret/db`, `secret/minio`, `secret/tracing`, `secret/gemini`
 **KV version:** 2 (supports versioning + metadata)
 **Why v2:** Enables secret versioning and soft-delete; no performance penalty for dev mode
 
@@ -586,7 +586,33 @@ hybrid. This confirms the D-P9-03 choice to use RRF k=60 over a tuned λ weighte
 
 ## Phase 11 — Redaction Layer + Exception Handling Refactor
 
-(To be filled)
+### D-P11-01 Redaction Pattern Order (Anthropic before OpenAI)
+**Rule:** Anthropic (`sk-ant-[A-Za-z0-9\-_]{20,}`) is checked before OpenAI (`sk-[A-Za-z0-9\-_]{20,}`).
+**Why order matters:** Both patterns start with `sk-`. Applying the OpenAI pattern first consumes `sk-` and leaves `ant-api03-…` visible in the log line. Specificity-first ordering in `_PATTERNS` prevents this.
+
+### D-P11-02 Three Call Sites, One Implementation
+**Implementation:** `redact()` / `redact_dict()` in `backend/app/infra/redaction.py`.
+**Call sites:**
+1. `structlog_processor` — first processor in `shared_processors` in `logging_setup.py`; covers every log line automatically.
+2. `sanitise_span_inputs()` — in `tracing.py`; must be called explicitly before passing metadata to `@traceable` or RunTree.
+3. `write_memory` tool — to be wired in Phase 13 (`tools/write_memory.py`) before the DB write and audit-log row.
+**Why three explicit call sites, not one decorator:** The three paths have different data shapes (string → log, dict → span, ORM payload → DB). A single decorator would need to inspect the call signature to know which argument to redact — fragile and opaque. Explicit call sites are readable and testable independently.
+
+### D-P11-03 structlog Processor Position (First in Chain)
+**Choice:** `structlog_processor` is index 0 in `shared_processors`.
+**Why first:** If any later processor (JSONRenderer, ConsoleRenderer, StackInfoRenderer) serialises a secret before the redaction processor runs, the secret leaves the process in plaintext. "First in chain" is the only position that guarantees coverage regardless of what downstream processors do.
+
+### D-P11-04 Exception Handler — 500 Message Policy
+**Policy:** For `status_code >= 500`, the HTTP response body carries the generic string `"An internal error occurred."` The actual exception message is logged internally (structlog, with `exc_info=exc`) alongside `request_id` and `trace_id`.
+**Why generic message:** The exception message may contain internal system details (SQL query fragments, file paths, stack variable values). Leaking these violates CLAUDE.md §5 ("Users NEVER see a stack trace"). The `request_id` in the response lets support correlate the generic error to the full internal log.
+
+### D-P11-05 RequestIDMiddleware Position
+**Choice:** Added via `app.add_middleware(RequestIDMiddleware)` — runs outermost, before `ExceptionMiddleware`.
+**Why outermost:** ExceptionMiddleware catches route exceptions and calls the `handle_app_error` handler. The handler reads `request.state.request_id`. If `RequestIDMiddleware` ran *inside* ExceptionMiddleware, the request_id would not yet be set when the handler fires. Outermost position guarantees it's always set.
+
+### D-P11-06 OpenAI Pattern Allows Hyphens (`sk-[A-Za-z0-9\-_]{20,}`)
+**Why hyphens:** OpenAI project-scoped keys use the format `sk-proj-<chars>`. The hyphen between `proj` and the random suffix is part of the key. The original pattern `[A-Za-z0-9]{20,}` missed these. Updated to `[A-Za-z0-9\-_]{20,}` to cover both classic and project keys.
+**Confirmed safe with Anthropic ordering:** `sk-ant-…` is still caught first by the Anthropic pattern; the OpenAI pattern never sees it.
 
 ## Phase 12 — Auth + Memory
 
