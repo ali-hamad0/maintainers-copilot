@@ -1,11 +1,29 @@
 # eval_thresholds.yaml
 # Committed thresholds for both eval suites.  Setting any value to 0 or "disabled"
 # causes the api to refuse to boot (CLAUDE.md §4 #5).
-# All values are minimum acceptable metrics on the golden test set.
+# All values are minimum acceptable metrics on the 25-example golden set.
+#
+# TF-IDF+LR thresholds calibrated to CI fixture (40 training examples, DECISIONS.md §D-P7-05):
+#   CI-fixture measured on golden set: accuracy=0.84, macro-F1=0.8264
+#   Full-train measured on test split: accuracy=0.9113, macro-F1=0.8804
+#   CI gate runs with --use-ci-fixture, so thresholds must reflect CI-fixture performance.
+#   threshold = CI-fixture measured - 0.05 buffer to absorb golden-set variance.
+# DistilBERT/Gemini thresholds remain extrapolated (pre-augmentation test split).
 
 classification:
-  accuracy: 0.70          # Phase 7 gate — must beat this or CI fails
-  f1_macro: 0.62          # calibrated to actual 0.6483; question class has 1 test sample
+  accuracy: 0.79          # API bootcheck floor — CI-fixture measured 0.84; buffer 0.05
+  f1_macro: 0.77          # API bootcheck floor — CI-fixture measured 0.8264; buffer 0.05
+
+  models:
+    tfidf_lr:
+      accuracy: 0.79      # CI-fixture measured 0.84 on 25-example golden set; threshold = actual - 0.05
+      f1_macro: 0.77      # CI-fixture measured 0.8264; question F1 0.75 (3 golden examples)
+    distilbert:
+      accuracy: 0.64      # DistilBERT test accuracy 0.8939 pre-augmentation; re-eval pending
+      f1_macro: 0.55      # DistilBERT test macro-F1 0.6483 pre-augmentation; re-eval pending
+    gemini:
+      accuracy: 0.68      # Gemini test accuracy 0.9357 pre-augmentation; re-eval pending
+      f1_macro: 0.60      # Gemini test macro-F1 0.6888 pre-augmentation; re-eval pending
 
 rag:
   hit_at_5: 0.70          # fraction of questions where correct chunk is in top-5

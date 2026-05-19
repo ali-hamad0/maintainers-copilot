@@ -10,9 +10,13 @@ import structlog
 from fastapi import FastAPI
 
 from app.api.classify_router import router as classify_router
+from app.api.ner import router as ner_router
+from app.api.summarise import router as summarise_router
 from app.config import get_settings
 from app.infra.weight_loader import download_and_verify
 from app.services.classifier_service import ClassifierService
+from app.services.ner_service import NERService
+from app.services.summarise_service import SummariseService
 
 log = structlog.get_logger(__name__)
 
@@ -23,8 +27,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     log.info("modelserver.starting", environment=settings.environment)
 
+    # ── Classifier ────────────────────────────────────────────────────────────
     # Download weights from MinIO and verify SHA-256 (CLAUDE.md §4 #2, #3).
-    # Raises RuntimeError → process exits before accepting traffic.
     weights_path = download_and_verify(
         minio_endpoint=settings.minio_endpoint,
         minio_access_key=settings.minio_access_key,
@@ -33,9 +37,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         minio_key=settings.weights_minio_key,
         expected_sha256=settings.weights_sha256,
     )
-
-    # Compute actual SHA-256 for the healthz response so the api bootcheck
-    # can verify it without re-downloading.
     actual_sha256 = hashlib.sha256(weights_path.read_bytes()).hexdigest()
 
     log.info("modelserver.loading_classifier", weights=str(weights_path))
@@ -44,9 +45,33 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.weights_sha256 = actual_sha256
     log.info("modelserver.classifier_ready", sha256=actual_sha256)
 
+    # ── NER ───────────────────────────────────────────────────────────────────
+    # spaCy en_core_web_sm is CPU-only (~12 MB).  If the model is not installed
+    # the service degrades gracefully to regex-only extraction.
+    nlp: object | None = None
+    try:
+        import spacy
+
+        nlp = spacy.load("en_core_web_sm")
+        log.info("modelserver.spacy_loaded")
+    except OSError:
+        log.warning(
+            "modelserver.spacy_model_missing", hint="run: python -m spacy download en_core_web_sm"
+        )
+    except ImportError:
+        log.warning("modelserver.spacy_not_installed")
+
+    app.state.ner = NERService(nlp)
+
+    # ── Summarise ─────────────────────────────────────────────────────────────
+    summariser = SummariseService(settings.gemini_api_key)
+    app.state.summariser = summariser
+
     log.info("modelserver.started")
     yield
 
+    # ── Cleanup ───────────────────────────────────────────────────────────────
+    await app.state.summariser.close()
     log.info("modelserver.shutdown")
 
 
@@ -59,14 +84,18 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(classify_router)
+    app.include_router(ner_router)
+    app.include_router(summarise_router)
 
     @app.get("/healthz", tags=["ops"])
     async def healthz() -> dict[str, object]:
         sha256 = getattr(app.state, "weights_sha256", None)
+        spacy_ok = getattr(app.state, "ner", None) is not None
         return {
             "status": "ok",
             "model_loaded": sha256 is not None,
             "weights_sha256": sha256,
+            "spacy_available": spacy_ok and getattr(app.state.ner, "_nlp", None) is not None,
         }
 
     return app
