@@ -69,3 +69,4 @@ docs/_references/
 *.key
 credentials.json
 .claude/
+.claude/
