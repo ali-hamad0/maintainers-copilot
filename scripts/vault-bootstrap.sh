@@ -17,15 +17,7 @@ echo "Writing placeholder secrets..."
 vault kv put secret/jwt \
   secret="CHANGE_ME_strong_jwt_signing_key_at_least_32_chars"
 
-# OpenAI API key placeholder
-vault kv put secret/openai \
-  api_key="sk-placeholder-openai-key"
-
-# Anthropic API key placeholder
-vault kv put secret/anthropic \
-  api_key="sk-ant-placeholder-anthropic-key"
-
-# Google Gemini API key — set GEMINI_API_KEY in your shell then:
+# Google Gemini API key — set real key via:
 #   docker exec <vault-container> vault kv put secret/gemini api_key="AIza..."
 vault kv put secret/gemini \
   api_key="AIza-placeholder-gemini-key"

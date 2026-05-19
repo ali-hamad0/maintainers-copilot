@@ -79,7 +79,58 @@ def assert_eval_thresholds_valid() -> None:
     log.info("bootcheck.eval_thresholds_ok", file=str(_THRESHOLDS_FILE))
 
 
-async def run_all(vault_addr: str, vault_token: str) -> None:
+async def assert_modelserver_healthy(modelserver_url: str, expected_sha256: str) -> None:
+    """Refuse to boot if modelserver is down, weights missing, or SHA-256 mismatches.
+
+    CLAUDE.md §4 #2: classifier weights file is missing.
+    CLAUDE.md §4 #3: weights SHA-256 does not match the model card.
+    """
+    healthz_url = modelserver_url.rstrip("/") + "/healthz"
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(healthz_url, timeout=10.0)
+            resp.raise_for_status()
+            data = resp.json()
+    except httpx.ConnectError as exc:
+        raise RuntimeError(
+            f"Cannot connect to modelserver at {modelserver_url}: {exc}\n"
+            "Ensure the 'modelserver' service is running before starting 'api'."
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise RuntimeError(
+            f"Modelserver healthz returned {exc.response.status_code} — "
+            "modelserver may still be booting."
+        ) from exc
+
+    if not data.get("model_loaded"):
+        raise RuntimeError(
+            "Modelserver reports classifier weights are NOT loaded.\n"
+            "Check modelserver logs — weights may be missing from MinIO."
+        )
+
+    actual_sha256 = data.get("weights_sha256", "")
+    if expected_sha256 and actual_sha256 != expected_sha256:
+        raise RuntimeError(
+            f"Classifier weights SHA-256 mismatch!\n"
+            f"  Expected (model_card.md) : {expected_sha256}\n"
+            f"  Reported by modelserver  : {actual_sha256}\n"
+            "Re-upload the correct weights or update CLASSIFIER_WEIGHTS_SHA256."
+        )
+
+    log.info(
+        "bootcheck.modelserver_ok",
+        url=modelserver_url,
+        sha256=actual_sha256 or "not-verified",
+    )
+
+
+async def run_all(
+    vault_addr: str,
+    vault_token: str,
+    modelserver_url: str,
+    classifier_weights_sha256: str,
+) -> None:
     """Run every startup assertion. Called once in lifespan()."""
     assert_eval_thresholds_valid()
     await assert_vault_reachable_and_seeded(vault_addr, vault_token)
+    await assert_modelserver_healthy(modelserver_url, classifier_weights_sha256)

@@ -8,8 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir uv
 
+# chatbot is a single-module app (app.py), not an installable package.
+# Extract declared deps from pyproject.toml via tomllib (stdlib 3.12) and install them.
 COPY pyproject.toml ./
-RUN uv pip install --no-cache-dir --system .
+RUN python3 -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); open('/tmp/reqs.txt','w').write('\n'.join(d['project']['dependencies']))" \
+    && uv pip install --no-cache-dir --system -r /tmp/reqs.txt
 
 COPY . .
 

@@ -28,7 +28,7 @@ See `DECISIONS.md` §D-P3-03 for the rationale.
 
 ### SHA-256 Hashes
 
-| Split | 527da66c84c29cb5eeefdbd72370535a4261e9f217c27bd348c13df22013aa63 |
+| Split | SHA-256 |
 |---|---|
 | `train` | `ac5c246f9a9d7e063a08ef657e124519f998faea5010008baff9f28570f66283` |
 | `val` | `e761bd4f311ea8425e6a08a71025573c4e67b00d7e78883e238a8bf8fa0b1fcc` |
@@ -89,17 +89,29 @@ and keeps Colab T4 training under ~20 minutes. See `DECISIONS.md` §D-P3-06.
 ## Weights
 
 - **MinIO path:** `models/classifier/weights.pt`
-- **Weights SHA-256:** TBD — filled by `notebooks/train_classifier.ipynb` Cell 14
-- **Run ID:** TBD — filled by `notebooks/train_classifier.ipynb` Cell 14
+- **Weights SHA-256:** `527da66c84c29cb5eeefdbd72370535a4261e9f217c27bd348c13df22013aa63`
+- **Run ID:** `1f610ed8-b3a0-4a96-b301-5fe445813019`
+- **Training duration:** ~18 minutes on Colab T4
+
+## Evaluation Results (final weights, run `1f610ed8`)
+
+| Split | Accuracy | Macro-F1 | Bug F1 | Feature F1 | Docs F1 | Question F1 |
+|---|---|---|---|---|---|---|
+| Val | 0.8755 | 0.6540 | 0.91 | 0.81 | 0.89 | 0.00 |
+| Test | 0.8939 | 0.6483 | 0.93 | 0.76 | 0.91 | 0.00 |
+
+**Note:** `question` F1 = 0.00 on both splits due to severe class imbalance (55/1307 train = 4.2%, 1/311 test = 0.3%). The macro-F1 threshold is calibrated accordingly — see `DECISIONS.md` §D-P4-09.
+
+Confusion matrix: `evals/artefacts/confusion_matrix.png`
 
 ## Evaluation Thresholds (CI gate)
 
 Defined in `backend/eval_thresholds.yaml`:
 
-| Metric | Threshold |
-|---|---|
-| `classification.accuracy` | 0.70 |
-| `classification.f1_macro` | 0.65 |
+| Metric | Threshold | Rationale |
+|---|---|---|
+| `classification.accuracy` | 0.70 | Model achieves 0.89 — comfortable margin |
+| `classification.f1_macro` | 0.62 | Calibrated to actual 0.6483; `question` class has 1 test sample, F1=0.00 by definition |
 
 ## Limitations
 

@@ -6,7 +6,6 @@ build-backend = "hatchling.build"
 name = "maintainers-copilot-chatbot"
 version = "0.1.0"
 description = "Streamlit admin UI for Maintainer's Copilot"
-readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Author", email = "author@example.com" }]

@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     # ── Service URLs ─────────────────────────────────────────────────────────
     modelserver_base_url: str = Field(default="http://modelserver:8001")
 
+    # ── Classifier weights (set after Colab training) ────────────────────────
+    # Expected SHA-256 of weights.pt as reported by modelserver /healthz.
+    # Empty string = skip SHA-256 gate (only acceptable before first training run).
+    classifier_weights_sha256: str = Field(default="")
+
     # ── Application ──────────────────────────────────────────────────────────
     environment: str = Field(default="development")
     debug: bool = Field(default=False)
