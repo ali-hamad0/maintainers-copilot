@@ -7,6 +7,7 @@ happens in services/.  No HTTP concerns here.
 import uuid
 from datetime import datetime
 
+from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -16,16 +17,16 @@ class Base(DeclarativeBase):
     pass
 
 
-class User(Base):
+class User(SQLAlchemyBaseUserTableUUID, Base):
+    """Application user.
+
+    Inherits id/email/hashed_password/is_active/is_superuser/is_verified from
+    SQLAlchemyBaseUserTableUUID.  We add role + timestamps on top.
+    """
+
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    hashed_password: Mapped[str] = mapped_column(String(1024), nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    is_superuser: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    role: Mapped[str] = mapped_column(String(50), nullable=False, default="user")
+    role: Mapped[str] = mapped_column(String(50), nullable=False, server_default="user")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -109,9 +110,13 @@ class MemoryLongTerm(Base):
     )
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    # embedding stored as Text here; actual vector(768) column created by migration
+    # embedding: vector(768) — actual pgvector column created by migration 0001
     source_tool: Mapped[str] = mapped_column(String(100), nullable=False)
     trust_score: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    # payload: structured memory content as JSONB (added migration 0004)
+    payload: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    # provenance: actor_id, source_tool, conversation_id, timestamp (added migration 0004)
+    provenance: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="memories")

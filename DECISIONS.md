@@ -62,8 +62,12 @@ Every decision with a number behind it. Updated at the end of each phase.
 **Decision finalised:** Phase 5
 
 ## D-07 Memory Type
-**Choice:** TBD — options: episodic / semantic / procedural  
-**Decision finalised:** Phase 10 (Wednesday noon)
+**Choice:** Episodic  
+**Why episodic over semantic/procedural:**
+- Episodic stores what happened in a specific conversation (triage decisions, expressed preferences, key exchanges). Each row carries user_id + conversation_id + timestamp — the natural grain for a per-maintainer triage assistant.
+- Semantic would require abstracting facts from raw exchanges — an extra NLP step with no payoff at this corpus scale.
+- Procedural captures repeatable workflows. The chatbot doesn't yet infer procedures from free-form chat; that is Phase 13 scope.
+**Decision finalised:** Phase 12
 
 ## D-08 CI Platform
 **Choice:** GitHub Actions  
@@ -75,8 +79,10 @@ Every decision with a number behind it. Updated at the end of each phase.
 **Parameters:** `m=16, ef_construction=64` (defaults)
 
 ## D-10 Redis TTL for Short-term Memory
-**Choice:** TBD Phase 12  
-**Candidates:** 3600s (1h), 86400s (1 day)  
+**Choice:** 1800 s (30 minutes)  
+**Why 1800 s:** Long enough to survive a coffee break (~10–15 min) with margin; short enough that abandoned sessions (user closes the tab, logs out) evict automatically without accumulating Redis memory. A 1-hour TTL (3600 s) was considered but doubles the memory footprint for no measurable UX improvement — maintainers rarely hold a triage session open for >20 minutes.
+**Refresh on write:** The TTL is reset to 1800 s on every `append()` call, so an active session never expires mid-conversation. Reads do NOT refresh the TTL (idempotent).
+**What happens at the boundary:** A read after expiry returns an empty list (same as a new conversation). The next write restarts the TTL from zero. If a user is mid-message when the key expires, the message they are composing is lost on send — the service will see an empty history and re-start the context window. This is acceptable for a maintainer triage tool (not a financial transaction).
 **Decision finalised:** Phase 12
 
 ## Phase 2 — Compose Stack + Vault + Migrate + Tracing Wired
@@ -616,7 +622,47 @@ hybrid. This confirms the D-P9-03 choice to use RRF k=60 over a tuned λ weighte
 
 ## Phase 12 — Auth + Memory
 
-(To be filled)
+### D-P12-01 Short-term Memory TTL
+**Value:** 1800 s (30 minutes) — see D-10 above for full rationale.
+
+### D-P12-02 JWT Access Token Lifetime
+**Value:** 3600 s (60 minutes)  
+**Why 60 min:** Standard for non-sensitive internal tooling. Short enough to limit exposure if a token is stolen; long enough that a typical 30–45 min triage session does not require re-authentication.  
+**Refresh:** No server-side refresh tokens are issued. The client re-authenticates via `POST /auth/jwt/login` when the access token expires. Documented in `ARCH.md §Refresh Token Mechanism`.
+
+### D-P12-03 fastapi-users Version
+**Version:** `fastapi-users[sqlalchemy,redis]==12.1.2`  
+**Why:** Already pinned in pyproject.toml from Phase 2. Provides BearerTransport + JWTStrategy out of the box. The SQLAlchemy adapter (`fastapi_users_db_sqlalchemy==7.0.0`) works with our existing async engine without adding a sync driver.
+
+### D-P12-04 JWT Secret Source
+**Source:** Vault KV path `secret/jwt`, field `secret` — read at lifespan startup, stored in `app.state.secrets.jwt_secret`.  
+**Why not .env:** Per CLAUDE.md §6 and bootcheck condition #1, secrets in `.env` are forbidden. The Vault path was bootstrapped in Phase 2 with a placeholder; the real secret must be set before deploying.  
+**Injection:** `get_jwt_strategy(request)` reads the secret from `request.app.state` at request time — never at import time. This avoids module-level globals for secrets.
+
+### D-P12-05 User Role Model
+**Roles:** `user` (default), `admin`  
+**Superuser bypass:** `is_superuser=True` bypasses all `require_role()` checks. Superusers are created only via the database (never exposed as a register field).  
+**Why two roles:** The brief describes admin-only mutation endpoints (widget config, memory management) and a regular-user chat endpoint. Two roles covers this without over-engineering an RBAC system for a 5-day project.
+
+### D-P12-06 Memory Provenance Schema
+```json
+{
+  "actor_id": "<user UUID>",
+  "source_tool": "<write_memory | ingest | ...>",
+  "conversation_id": "<UUID or null>",
+  "timestamp": "<ISO-8601 UTC>"
+}
+```
+**Why JSONB over columns:** The provenance fields are always read together for audit display; JSONB avoids four extra columns on a table that already has many. Querying individual provenance fields (e.g. `WHERE provenance->>'source_tool' = 'write_memory'`) remains efficient with a GIN index if needed in Phase 13.
+
+### D-P12-07 Audit Log Trigger
+**Policy:** `INSERT INTO audit_log` is performed atomically with every `INSERT INTO memory_long_term` (inside the same SQLAlchemy session, flushed before commit). The audit row carries `action='memory.write'`, `actor_id=user_id`, `target_id=memory_row.id`, and a `payload` subset (source_tool, trust_score, conversation_id).  
+**Why application-level, not DB trigger:** Application-level audit is testable without Postgres; the payload is redacted by the service before being written (CLAUDE.md §6); DB triggers cannot call `redact_dict()`.
+
+### D-P12-08 Refresh Token Strategy
+**Decision:** No server-issued refresh tokens in Phase 12.  
+**Rationale:** fastapi-users' JWTStrategy is stateless (no server-side storage). Adding refresh tokens requires a `DatabaseStrategy` with an `AccessToken` table — non-trivial schema + migration + revocation logic. For a 5-day project where the chatbot session is ≤60 min, the simpler approach (re-login on expiry) is adequate.  
+**Documented in:** `ARCH.md §Refresh Token Mechanism`.
 
 ## Phase 13 — Tool-Calling Chatbot
 
