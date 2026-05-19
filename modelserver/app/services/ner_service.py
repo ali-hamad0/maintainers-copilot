@@ -16,11 +16,6 @@ import structlog
 
 log = structlog.get_logger(__name__)
 
-try:
-    from spacy.language import Language as SpacyLanguage
-except ImportError:  # pragma: no cover
-    SpacyLanguage = None  # type: ignore[assignment,misc]
-
 # ---------------------------------------------------------------------------
 # Regex patterns for code-shaped entities in GitHub issues
 # ---------------------------------------------------------------------------
