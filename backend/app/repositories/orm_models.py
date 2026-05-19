@@ -7,7 +7,7 @@ happens in services/.  No HTTP concerns here.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -115,6 +115,26 @@ class MemoryLongTerm(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="memories")
+
+
+class Chunk(Base):
+    __tablename__ = "chunks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("chunks.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    doc_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    doc_type: Mapped[str] = mapped_column(String(50), nullable=False)   # 'issue' | 'docs'
+    chunk_role: Mapped[str] = mapped_column(String(20), nullable=False)  # 'parent' | 'child'
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    doc_metadata: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    # embedding: vector(768) — actual pgvector column added by migration 0002
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class EvalRun(Base):
