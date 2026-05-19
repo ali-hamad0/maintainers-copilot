@@ -54,8 +54,8 @@ class IngestService:
 
     @staticmethod
     def _clean(raw: str) -> str:
-        raw = re.sub(r"```[a-z]*\n", "```\n", raw)   # normalise code-fence language tags
-        raw = re.sub(r"\n{3,}", "\n\n", raw)           # collapse excessive blank lines
+        raw = re.sub(r"```[a-z]*\n", "```\n", raw)  # normalise code-fence language tags
+        raw = re.sub(r"\n{3,}", "\n\n", raw)  # collapse excessive blank lines
         return raw.strip()
 
     # ── Stage 3: Chunk ───────────────────────────────────────────────────────
@@ -149,9 +149,7 @@ class IngestService:
                     continue
 
                 embedding_str = (
-                    f"[{','.join(str(v) for v in chunk.embedding)}]"
-                    if chunk.embedding
-                    else None
+                    f"[{','.join(str(v) for v in chunk.embedding)}]" if chunk.embedding else None
                 )
                 await session.execute(
                     text(

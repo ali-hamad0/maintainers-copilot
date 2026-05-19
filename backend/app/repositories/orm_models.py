@@ -128,7 +128,7 @@ class Chunk(Base):
         index=True,
     )
     doc_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    doc_type: Mapped[str] = mapped_column(String(50), nullable=False)   # 'issue' | 'docs'
+    doc_type: Mapped[str] = mapped_column(String(50), nullable=False)  # 'issue' | 'docs'
     chunk_role: Mapped[str] = mapped_column(String(20), nullable=False)  # 'parent' | 'child'
     content: Mapped[str] = mapped_column(Text, nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)

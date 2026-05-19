@@ -8,18 +8,18 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ChunkMetadata:
-    doc_type: str            # 'issue' | 'docs'
-    doc_id: str              # issue number or doc filename
-    chunk_role: str          # 'parent' | 'child'
-    closed_at: str | None = None   # ISO 8601, issues only
+    doc_type: str  # 'issue' | 'docs'
+    doc_id: str  # issue number or doc filename
+    chunk_role: str  # 'parent' | 'child'
+    closed_at: str | None = None  # ISO 8601, issues only
     labels: list[str] = field(default_factory=list)
-    repo_path: str | None = None   # file path, docs only
+    repo_path: str | None = None  # file path, docs only
 
 
 @dataclass
 class ChunkRecord:
     id: uuid.UUID
-    parent_id: uuid.UUID | None   # None for parent chunks
+    parent_id: uuid.UUID | None  # None for parent chunks
     doc_id: str
     doc_type: str
     chunk_role: str
