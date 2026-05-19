@@ -215,9 +215,9 @@ def test_users_me_response_excludes_hashed_password() -> None:
     response = client.get("/users/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
     body = response.json()
-    assert "hashed_password" not in body, (
-        f"hashed_password must not appear in /users/me response. Got keys: {list(body.keys())}"
-    )
+    assert (
+        "hashed_password" not in body
+    ), f"hashed_password must not appear in /users/me response. Got keys: {list(body.keys())}"
     assert "role" in body
     assert body["email"] == fake_user.email
 

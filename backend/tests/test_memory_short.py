@@ -76,9 +76,7 @@ def conv_id() -> uuid.UUID:
 
 
 @pytest.mark.asyncio
-async def test_append_single_message(
-    svc: MemoryShortService, conv_id: uuid.UUID
-) -> None:
+async def test_append_single_message(svc: MemoryShortService, conv_id: uuid.UUID) -> None:
     msg: dict[str, Any] = {"role": "user", "content": "hello"}
     await svc.append(conv_id, msg)
 
@@ -88,9 +86,7 @@ async def test_append_single_message(
 
 
 @pytest.mark.asyncio
-async def test_append_preserves_order(
-    svc: MemoryShortService, conv_id: uuid.UUID
-) -> None:
+async def test_append_preserves_order(svc: MemoryShortService, conv_id: uuid.UUID) -> None:
     msgs = [
         {"role": "user", "content": "first"},
         {"role": "assistant", "content": "second"},
@@ -104,14 +100,12 @@ async def test_append_preserves_order(
 
 
 @pytest.mark.asyncio
-async def test_ttl_set_on_append(
-    svc: MemoryShortService, conv_id: uuid.UUID
-) -> None:
+async def test_ttl_set_on_append(svc: MemoryShortService, conv_id: uuid.UUID) -> None:
     await svc.append(conv_id, {"role": "user", "content": "ping"})
     ttl = await svc.ttl(conv_id)
-    assert ttl == _TTL_SECONDS, (
-        f"Expected TTL={_TTL_SECONDS} ({_TTL_SECONDS // 60} min), got {ttl}."
-    )
+    assert (
+        ttl == _TTL_SECONDS
+    ), f"Expected TTL={_TTL_SECONDS} ({_TTL_SECONDS // 60} min), got {ttl}."
 
 
 @pytest.mark.asyncio
@@ -132,9 +126,7 @@ async def test_ttl_refreshed_on_each_append(
 
 
 @pytest.mark.asyncio
-async def test_clear_removes_all_messages(
-    svc: MemoryShortService, conv_id: uuid.UUID
-) -> None:
+async def test_clear_removes_all_messages(svc: MemoryShortService, conv_id: uuid.UUID) -> None:
     await svc.append(conv_id, {"role": "user", "content": "a"})
     await svc.append(conv_id, {"role": "user", "content": "b"})
     await svc.clear(conv_id)
@@ -143,9 +135,7 @@ async def test_clear_removes_all_messages(
 
 
 @pytest.mark.asyncio
-async def test_clear_nonexistent_is_safe(
-    svc: MemoryShortService
-) -> None:
+async def test_clear_nonexistent_is_safe(svc: MemoryShortService) -> None:
     """Clearing a conversation that was never written must not raise."""
     await svc.clear(uuid.uuid4())
 
@@ -154,16 +144,12 @@ async def test_clear_nonexistent_is_safe(
 
 
 @pytest.mark.asyncio
-async def test_get_all_empty_for_unknown_conversation(
-    svc: MemoryShortService
-) -> None:
+async def test_get_all_empty_for_unknown_conversation(svc: MemoryShortService) -> None:
     result = await svc.get_all(uuid.uuid4())
     assert result == []
 
 
 @pytest.mark.asyncio
-async def test_ttl_returns_minus_two_for_missing_key(
-    svc: MemoryShortService
-) -> None:
+async def test_ttl_returns_minus_two_for_missing_key(svc: MemoryShortService) -> None:
     ttl = await svc.ttl(uuid.uuid4())
     assert ttl == -2, "Redis convention: -2 means key does not exist."

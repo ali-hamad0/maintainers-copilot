@@ -27,9 +27,7 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     __tablename__ = "users"
 
     role: Mapped[str] = mapped_column(String(50), nullable=False, server_default="user")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
