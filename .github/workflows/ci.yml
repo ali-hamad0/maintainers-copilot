@@ -1,0 +1,165 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Job 1 — Python lint + type check (backend)
+  # --------------------------------------------------------------------------
+  lint:
+    name: Lint & type-check (backend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install --quiet uv
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: uv sync --frozen
+
+      - name: ruff lint
+        working-directory: backend
+        run: uv run ruff check .
+
+      - name: black format check
+        working-directory: backend
+        run: uv run black --check .
+
+      - name: mypy type check
+        working-directory: backend
+        run: uv run mypy app/
+
+  # --------------------------------------------------------------------------
+  # Job 2 — Classification golden-set eval gate
+  #
+  # Runs TF-IDF+LR (retrained on the committed 40-example CI fixture) against
+  # the 25-example golden set and fails if macro-F1 drops below the committed
+  # threshold in backend/eval_thresholds.yaml.
+  #
+  # DistilBERT: requires MODELSERVER_URL secret → skipped if absent.
+  # Gemini:     requires GEMINI_API_KEY secret → skipped if absent.
+  #
+  # To force a regression locally:
+  #   1. Lower tfidf_lr.f1_macro threshold in backend/eval_thresholds.yaml to 0.99
+  #   2. Run: python evals/run_classification_eval.py --use-ci-fixture \
+  #              --skip-distilbert --skip-gemini --skip-minio-upload
+  #   3. Observe exit code 1 with "FAIL — threshold regression" message
+  # --------------------------------------------------------------------------
+  eval-gate:
+    name: Classification eval gate
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install --quiet uv
+
+      - name: Install backend dependencies (provides sklearn, httpx, pyyaml, numpy)
+        working-directory: backend
+        run: uv sync --frozen
+
+      - name: Validate golden set structure
+        working-directory: backend
+        run: |
+          uv run python - <<'EOF'
+          import json
+          from pathlib import Path
+
+          golden_path = Path("../evals/golden/classification.jsonl")
+          valid_labels = {"bug", "feature", "docs", "question"}
+          rows = []
+          with golden_path.open() as fh:
+              for i, line in enumerate(fh, 1):
+                  line = line.strip()
+                  if not line:
+                      continue
+                  row = json.loads(line)
+                  assert "id" in row, f"line {i}: missing 'id'"
+                  assert "text" in row, f"line {i}: missing 'text'"
+                  assert "label" in row, f"line {i}: missing 'label'"
+                  assert row["label"] in valid_labels, (
+                      f"line {i}: invalid label {row['label']!r}"
+                  )
+                  assert len(row["text"]) > 20, f"line {i}: text too short"
+                  rows.append(row)
+          assert len(rows) == 25, f"Expected 25 golden examples, got {len(rows)}"
+          counts = {}
+          for r in rows:
+              counts[r["label"]] = counts.get(r["label"], 0) + 1
+          print(f"Golden set OK: {len(rows)} examples  {counts}")
+          EOF
+
+      - name: Validate threshold file (no zeros, no 'disabled')
+        working-directory: backend
+        run: |
+          uv run python - <<'EOF'
+          import yaml
+          from pathlib import Path
+
+          thresholds = yaml.safe_load(Path("eval_thresholds.yaml").read_text())
+
+          def walk(node, path=""):
+              if isinstance(node, dict):
+                  for k, v in node.items():
+                      walk(v, f"{path}.{k}" if path else k)
+              elif isinstance(node, (int, float)):
+                  assert node != 0, f"Threshold {path} = 0 (CLAUDE.md §4 #5)"
+                  assert node > 0, f"Threshold {path} is negative"
+              elif isinstance(node, str):
+                  assert node.lower() != "disabled", (
+                      f"Threshold {path} = 'disabled' (CLAUDE.md §4 #5)"
+                  )
+
+          walk(thresholds)
+          print("Threshold file OK — no zeros or 'disabled' values")
+          EOF
+
+      - name: Run classification eval (TF-IDF+LR, CI fixture)
+        working-directory: backend
+        env:
+          MODELSERVER_URL: ${{ secrets.MODELSERVER_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          SKIP_BERT=""
+          SKIP_GEMINI=""
+
+          if [ -z "$MODELSERVER_URL" ]; then
+            SKIP_BERT="--skip-distilbert"
+          fi
+
+          if [ -z "$GEMINI_API_KEY" ]; then
+            SKIP_GEMINI="--skip-gemini"
+          fi
+
+          uv run python ../evals/run_classification_eval.py \
+            --use-ci-fixture \
+            $SKIP_BERT \
+            $SKIP_GEMINI \
+            --skip-minio-upload \
+            --report-path /tmp/eval_report.json
+
+      - name: Upload eval report as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report-${{ github.sha }}
+          path: /tmp/eval_report.json
+          if-no-files-found: warn

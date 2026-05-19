@@ -30,10 +30,10 @@ See `DECISIONS.md` §D-P3-03 for the rationale.
 
 | Split | SHA-256 |
 |---|---|
-| `train` | `ac5c246f9a9d7e063a08ef657e124519f998faea5010008baff9f28570f66283` |
-| `val` | `e761bd4f311ea8425e6a08a71025573c4e67b00d7e78883e238a8bf8fa0b1fcc` |
-| `test` | `d7b07af4318852c8f6cd82c70fb9842b8e9d178ec14504e2e99d265c17cc9f84` |
-| `rag_corpus` | `5dde72fbe9105d0ca3f7ce7d80a826aa9d13ffb91639d89a4b31561b31e6ab28` |
+| `train` | `0b5f1182ad5279204187608ecbe43091b03cfe45ff2718276fc89a020b5ed27a` |
+| `val` | `1dd38245840840e99cc4dd217db92eff806d8756ade465cf56da67c0522e4531` |
+| `test` | `8e9b54386438ae4fd5cebe953ab26eb6734785a8438af0aa779ea65e1c5ff822` |
+| `rag_corpus` | `0f49f50787655f2e3fc476933cb875b6dfe0fca2243de7460092bd8ed60e07a4` |
 
 ## Architecture
 
