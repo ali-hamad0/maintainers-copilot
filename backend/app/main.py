@@ -24,7 +24,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     log.info("api.starting", environment=settings.environment)
 
     # 2. Startup assertions — refuse to boot on any failure (CLAUDE.md §4).
-    await bootcheck.run_all(settings.vault_addr, settings.vault_root_token)
+    await bootcheck.run_all(
+        settings.vault_addr,
+        settings.vault_root_token,
+        settings.modelserver_base_url,
+        settings.classifier_weights_sha256,
+    )
 
     # 3. Load secrets from Vault.
     secrets = await load_secrets(settings.vault_addr, settings.vault_root_token)

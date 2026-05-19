@@ -8,10 +8,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir uv
 
-COPY pyproject.toml ./
-RUN uv pip install --no-cache-dir --system .
+# Install torch CPU-only first (saves ~2 GB vs the default CUDA wheel).
+RUN uv pip install --no-cache-dir --system \
+    torch==2.2.2 \
+    --index-url https://download.pytorch.org/whl/cpu
 
 COPY . .
+
+RUN uv pip install --no-cache-dir --system .
+
+# Pre-download only the tokenizer + config (~1 MB).
+# We do NOT download base model weights — our fine-tuned weights come from MinIO.
+RUN python3 -c "\
+from transformers import DistilBertTokenizerFast, DistilBertConfig; \
+DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased'); \
+DistilBertConfig.from_pretrained('distilbert-base-uncased')"
 
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:8001/healthz').raise_for_status()"

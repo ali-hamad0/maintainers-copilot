@@ -129,6 +129,8 @@ services:
       TRACING_BACKEND: ${TRACING_BACKEND:-langsmith}
       LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-maintainers-copilot}
       MODELSERVER_BASE_URL: http://modelserver:8001
+      # Must match the SHA-256 reported by modelserver /healthz after training.
+      CLASSIFIER_WEIGHTS_SHA256: ${WEIGHTS_SHA256:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -136,6 +138,8 @@ services:
         condition: service_healthy
       vault-bootstrap:
         condition: service_completed_successfully
+      modelserver:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/healthz').raise_for_status()"]
       interval: 10s
@@ -153,14 +157,26 @@ services:
       VAULT_ROOT_TOKEN: ${VAULT_ROOT_TOKEN:-dev-root-token}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # MinIO — modelserver downloads weights on startup
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-maintainers-copilot}
+      WEIGHTS_MINIO_KEY: ${WEIGHTS_MINIO_KEY:-models/classifier/weights.pt}
+      # Set to the SHA-256 printed by upload_weights.py after Colab training.
+      # Leave empty to skip SHA-256 gate (only before first training run).
+      WEIGHTS_SHA256: ${WEIGHTS_SHA256:-}
     depends_on:
       vault-bootstrap:
         condition: service_completed_successfully
+      minio:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8001/healthz').raise_for_status()"]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 5
+      start_period: 120s
 
   chatbot:
     build:

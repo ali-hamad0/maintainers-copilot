@@ -52,13 +52,13 @@ async def load_secrets(vault_addr: str, vault_token: str) -> VaultSecrets:
         try:
             openai_data = await _read_kv(client, vault_addr, vault_token, "openai")
             openai_key: str = openai_data.get("api_key", "")
-        except Exception:
+        except (httpx.HTTPStatusError, KeyError):
             openai_key = ""
 
         try:
             anthropic_data = await _read_kv(client, vault_addr, vault_token, "anthropic")
             anthropic_key: str = anthropic_data.get("api_key", "")
-        except Exception:
+        except (httpx.HTTPStatusError, KeyError):
             anthropic_key = ""
 
     secrets = VaultSecrets(

@@ -68,3 +68,5 @@ docs/_references/
 *.pem
 *.key
 credentials.json
+.claude/
+.claude/

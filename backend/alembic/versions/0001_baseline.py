@@ -38,10 +38,10 @@ def upgrade() -> None:
         ),
         sa.Column("email", sa.String(255), nullable=False, unique=True),
         sa.Column("hashed_password", sa.String(1024), nullable=False),
-        sa.Column("is_active", sa.Boolean, nullable=False, server_default="true"),
-        sa.Column("is_superuser", sa.Boolean, nullable=False, server_default="false"),
-        sa.Column("is_verified", sa.Boolean, nullable=False, server_default="false"),
-        sa.Column("role", sa.String(50), nullable=False, server_default="'user'"),
+        sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.text("true")),
+        sa.Column("is_superuser", sa.Boolean, nullable=False, server_default=sa.text("false")),
+        sa.Column("is_verified", sa.Boolean, nullable=False, server_default=sa.text("false")),
+        sa.Column("role", sa.String(50), nullable=False, server_default=sa.text("'user'")),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -84,9 +84,9 @@ def upgrade() -> None:
             "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
         ),
         sa.Column("name", sa.String(255), nullable=False),
-        sa.Column("allowed_origins", JSONB, nullable=False, server_default="'[]'"),
+        sa.Column("allowed_origins", JSONB, nullable=False, server_default=sa.text("'[]'")),
         sa.Column("owner_id", UUID(as_uuid=True), nullable=False),
-        sa.Column("is_active", sa.Boolean, nullable=False, server_default="true"),
+        sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.text("true")),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -158,7 +158,7 @@ def upgrade() -> None:
         # vector(768) — dimension locked to D-02 (gemini-embedding-001)
         sa.Column("embedding", sa.Text, nullable=True),  # placeholder; replaced below
         sa.Column("source_tool", sa.String(100), nullable=False),
-        sa.Column("trust_score", sa.Float, nullable=False, server_default="1.0"),
+        sa.Column("trust_score", sa.Float, nullable=False, server_default=sa.text("1.0")),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
