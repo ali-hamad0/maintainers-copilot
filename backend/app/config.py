@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     embedding_model: str = Field(default="gemini-embedding-001")
     embedding_dim: int = Field(default=768)
 
+    # ── Retrieval (Phase 9) ───────────────────────────────────────────────────
+    # RRF k constant from Cormack et al. 2009; 60 is the standard value.
+    # Tuned on RAG golden set in Phase 10; update here after tuning.
+    hybrid_rrf_k: int = Field(default=60)
+
     # ── Tracing ───────────────────────────────────────────────────────────────
     tracing_backend: str = Field(default="langsmith")
     langsmith_project: str = Field(default="maintainers-copilot")

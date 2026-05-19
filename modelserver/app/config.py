@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # Empty string = API key not configured; summarise endpoint returns fallback.
     gemini_api_key: str = Field(default="")
 
+    # ── Reranker (for /v1/rerank endpoint) ───────────────────────────────────────
+    # HuggingFace model name; downloaded by sentence-transformers on first boot.
+    reranker_model: str = Field(default="cross-encoder/ms-marco-MiniLM-L-6-v2")
+
     log_level: str = Field(default="INFO")
     log_format: str = Field(default="json")
 
