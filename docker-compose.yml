@@ -205,6 +205,16 @@ services:
     ports:
       - "${HOST_PORT:-8080}:8080"
 
+  # Second host served on port 8090 — NOT in any widget allowed_origins list.
+  # Demonstrates CORS blocking: open http://localhost:8090/blocked.html and
+  # watch the browser console for the CORS policy error.
+  host-blocked:
+    build:
+      context: ./host
+      dockerfile: Dockerfile
+    ports:
+      - "${HOST_BLOCKED_PORT:-8090}:8080"
+
 volumes:
   db_data:
   minio_data:

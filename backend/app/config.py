@@ -58,6 +58,13 @@ class Settings(BaseSettings):
     # Tuned on RAG golden set in Phase 10; update here after tuning.
     hybrid_rrf_k: int = Field(default=60)
 
+    # ── Agent (Phase 13) ─────────────────────────────────────────────────────
+    # gemini-2.5-flash chosen for tool-calling quality + cost balance (D-P13-01).
+    agent_model: str = Field(default="gemini-2.5-flash")
+    # 5 iterations: enough for classify+rag+answer in one turn with one retry.
+    # D-P13-02: capped to prevent runaway loops while allowing multi-step queries.
+    agent_max_iterations: int = Field(default=5)
+
     # ── Tracing ───────────────────────────────────────────────────────────────
     tracing_backend: str = Field(default="langsmith")
     langsmith_project: str = Field(default="maintainers-copilot")

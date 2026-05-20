@@ -5,9 +5,12 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: "dist",
-    // Single JS bundle for embedding
     rollupOptions: {
       output: {
+        // Fixed filename so the host page can reference it without a content hash.
+        entryFileNames: "assets/index.js",
+        chunkFileNames: "assets/[name].js",
+        assetFileNames: "assets/[name].[ext]",
         manualChunks: undefined,
       },
     },
