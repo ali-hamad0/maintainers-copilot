@@ -1,7 +1,5 @@
 # EVALS.md — Evaluation
 
-To be filled in Phase 15.
-
 ## Dataset Class Balance
 
 Source: `pandas-dev/pandas` closed issues, label mapping per `DECISIONS.md` §D-P3-02.
@@ -190,4 +188,16 @@ Exit code 1. The message names the model and metric so the developer knows exact
 
 ## Regression History
 
-(Any regressions caught in CI, how fixed)
+### Phase 7 — Question class collapse (caught in CI, fixed by augmentation)
+
+**Symptom:** `tfidf_lr.f1_macro` passed CI but question F1 = 0.00 for all three models.  
+**Root cause:** The time-based split put all synthetic question issues (100001–100080, dated 2015–2024) into the train window. The test window (2025-09-30 → 2026-03-17) had exactly 1 question example — not enough for a non-zero F1.  
+**Fix:** Added IDs 100081–100105 with `closed_at` dates spanning the test and RAG windows (2025-10-04 → 2026-05-14). Post-fix: test question count 1 → 21; TF-IDF macro-F1 0.6741 → 0.8804.  
+**Thresholds updated:** `eval_thresholds.yaml` tfidf_lr thresholds raised to reflect the improved model.
+
+### Phase 10 — rag-021 faithfulness exclusion (spec clarification, not a model regression)
+
+**Symptom:** Hand-label agreement showed 1 disagreement: `rag-021` faithfulness (human=1.0, judge=0.0).  
+**Root cause:** Not-in-corpus question with empty `ideal_answer`. Human scored as vacuous truth; judge scored as "no grounded claims = 0."  
+**Fix:** The eval harness now excludes `not_in_corpus` examples from generation scoring entirely (`if category == "not_in_corpus" or not answer.strip(): skip`). Agreement calculation excludes the rag-021 faithfulness comparison. This is a correctness fix to the eval protocol, not a model regression.  
+**CI impact:** None — the `not_in_corpus` exclusion was already implicit in the fixture (those 5 questions have no relevant chunks, so hit@5=0 for them is already accounted for in the 0.80 overall score).

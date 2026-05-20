@@ -735,4 +735,32 @@ hybrid. This confirms the D-P9-03 choice to use RRF k=60 over a tuned λ weighte
 
 ## Phase 15 — Polish, Docs, CI Green, Submission, Demo
 
-(To be filled)
+### D-P15-01 Widget Bundle Size: 48 KB gzipped
+**Measured:** Vite production build — `dist/assets/index.js`: 147.77 kB raw, 48.04 kB gzipped.
+**Why this size:** The widget is React 18 + ReactDOM + fetch-based SSE client + login form. No UI library (Tailwind excluded from build, vanilla CSS). The bulk of the 148 kB raw is React + ReactDOM (~130 kB); app logic is ~18 kB. To cut by 40 KB gzipped, the only lever is removing React entirely (Preact or vanilla JS = ~10 kB). Not done: React is retained because the Vite + React scaffold matches the bootcamp standard; re-writes are out of scope post-submission.
+
+### D-P15-02 Submission Metrics Summary
+All numbers from actual measured runs (see EVALS.md for provenance):
+
+| Metric | Value | Source |
+|---|---|---|
+| TF-IDF+LR macro-F1 (post-augmentation test split) | **0.8804** | `eval_classical_baseline.py`, run b751de02 |
+| DistilBERT macro-F1 (pre-augmentation test split) | **0.6483** | `eval_distilbert_baseline.py`, run 1f610ed8 |
+| Gemini 2.5 Flash macro-F1 (pre-augmentation test split) | **0.6888** | `eval_llm_baseline.py`, run 27e573d5 |
+| RAG hit@5 | **0.80** | CI fixture, 2026-05-19 |
+| RAG MRR@10 | **0.531** | CI fixture, 2026-05-19 |
+| Widget bundle size (gzipped) | **48 KB** | Vite build, 2026-05-20 |
+| Short-term memory TTL | **1800 s** | D-P12-01 |
+| JWT token lifetime | **3600 s** | D-P12-02 |
+| CORS cache TTL | **30 s** | D-P14-01 |
+| Chunk child size | **256 chars** | D-P8-02 |
+| Chunk overlap | **32 chars** | D-P8-02 |
+| RRF k | **60** | D-P9-03 |
+| Agent max iterations | **5** | D-P13-02 |
+
+### D-P15-03 Docs Approach
+**RUNBOOK.md:** Full operational runbook — bring-up, ingest, retrain, Vault seeding, trace reading, wipe, common errors. All commands are exact (no placeholder steps).
+**ARCH.md:** Layer diagram, request-to-row paths for register/login/chat/memory write, memory model, trace tree, widget CORS, refresh token rationale.
+**DECISIONS.md:** Every decision with the number behind it; updated at the end of each phase.
+**EVALS.md:** Golden set provenance, metrics, judge model, hand-label agreement table, threshold calibration, regression history.
+**SECURITY.md:** 9 redaction patterns with specificity-first rationale, refuse-to-boot conditions, Vault contents, threat model table, explicit not-covered list.

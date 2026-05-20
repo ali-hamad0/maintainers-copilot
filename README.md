@@ -363,21 +363,19 @@ curl http://localhost:8000/healthz  # Should return 200
 
 ## Submission Block
 
-*(To be filled Friday, Phase 15)*
-
 ```
-Project 7 — [Your Name]
-Repo: [GitHub URL]
+Project 7 — Ali Hamad
+Repo: https://github.com/ali-hamad0/maintainers-copilot
 Tag: v0.1.0-week7
-Dataset: [repo] issues, [N train / N val / N test]
-Classification — Classical: F1=[n] | Fine-tuned: F1=[n] | LLM: F1=[n]
-Deployment choice: [model] — because [one line]
-Embedding model: [name] — chosen because [one line]
-RAG — hit@5=[n] | MRR@10=[n] | Faithfulness=[n] | Answer relevancy=[n]
-Long-term memory type: [episodic | semantic | procedural]
-Tracing backend: [name] — chosen because [one line]
-Widget bundle size: [n] KB (gzipped)
-LLM: [provider + model]
+Dataset: pandas-dev/pandas issues, 1373 train / 262 val / 327 test (time-based split)
+Classification — Classical (TF-IDF+LR): F1=0.8804 | Fine-tuned (DistilBERT): F1=0.6483 | LLM (Gemini 2.5 Flash): F1=0.6888
+Deployment choice: DistilBERT — no API dependency; 122ms latency acceptable for async triage
+Embedding model: gemini-embedding-001 — API consistency with Gemini LLM; 768-dim locked at Phase 1
+RAG — hit@5=0.80 | MRR@10=0.531 | Faithfulness=pending live judge | Answer relevancy=pending live judge
+Long-term memory type: episodic
+Tracing backend: LangSmith — bootcamp default; native Google GenAI tracing via langsmith SDK
+Widget bundle size: 48 KB (gzipped)
+LLM: Google Gemini 2.5 Flash (gemini-2.5-flash)
 ```
 
 ---
