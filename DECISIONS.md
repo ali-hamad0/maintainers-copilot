@@ -704,7 +704,34 @@ hybrid. This confirms the D-P9-03 choice to use RRF k=60 over a tuned λ weighte
 
 ## Phase 14 — Streamlit App + React Widget + Host App + Origin Allowlist
 
-(To be filled)
+### D-P14-01 CORS Allowlist from DB, Not Env Var
+**Choice:** `CORSFromDBMiddleware` reads the union of all active `widget_config.allowed_origins` from Postgres on each preflight, with a TTL=30s in-memory cache (`cachetools.TTLCache`).
+**Why 30s TTL:** New widget configs become effective within one cache window. Per-request DB queries at scale are wasteful; 30s is short enough to feel real-time and long enough to reduce load.
+**Alternative rejected:** Hardcoded `CORS_ORIGINS` env var — violates CLAUDE.md §6 "CORS allowlist is enforced from the `widget.allowed_origins` field in Postgres, not from a hardcoded env var."
+
+### D-P14-02 Widget Embed Endpoint with CSP frame-ancestors
+**Choice:** `GET /embed/{widget_id}` returns a JS snippet with `Content-Security-Policy: frame-ancestors <allowed_origins>` header. Inactive or missing widget IDs return `frame-ancestors 'none'`.
+**Why CSP over X-Frame-Options:** CSP `frame-ancestors` supersedes XFO and supports multiple origins in one directive. XFO is kept as a fallback for older browsers when no origins are listed.
+
+### D-P14-03 Widget Bundle Fixed Filename
+**Choice:** Vite `entryFileNames: "assets/index.js"` — removes content hash from bundle filename.
+**Why:** The host page references `http://localhost:3000/assets/index.js` statically. Without a fixed name, the hash changes on every build, breaking the host embed script. Acceptable for a demo setup; production would use a manifest-based loader.
+
+### D-P14-04 CORS Demo Uses Two nginx Containers
+**Choice:** `host` (port 8080, in allowlist) and `host-blocked` (port 8090, not in allowlist) — both reuse the same Docker image, just mapped to different host ports.
+**Why separate containers:** The browser's `Origin` header is set to the hostname:port of the *page* making the request. Using two ports on the same nginx image is the minimal change that gives two distinct origins without adding a new Dockerfile.
+
+### D-P14-05 Streamlit Session State for JWT
+**Choice:** JWT token stored in `st.session_state["jwt_token"]` — no cookies, no local storage.
+**Why:** Streamlit re-runs the entire script on every interaction. `session_state` is the only Streamlit-native way to persist ephemeral values across reruns within one browser tab. This is standard Streamlit auth practice; there is no server-side session risk because the token is per-tab memory only.
+
+### D-P14-06 Widget React SSE via ReadableStream
+**Choice:** `fetch` + `res.body.getReader()` + `TextDecoder` for SSE consumption in the React widget.
+**Why not EventSource:** `EventSource` only supports GET requests; `/chat` is POST. `fetch` + streaming body is the correct approach for POST SSE. The reader loop accumulates partial `data:` lines across chunk boundaries using a buffer.
+
+### D-P14-07 Widget Login Form (No Token Passthrough)
+**Choice:** The React widget includes a mini email/password login form that POSTs to `/auth/jwt/login`. Token is stored in React component state (not localStorage).
+**Why not window.__COPILOT_JWT__:** Requires the host page to know the user's JWT in advance — impractical for the demo. A self-contained login form keeps the widget standalone and avoids coupling to host-side auth.
 
 ## Phase 15 — Polish, Docs, CI Green, Submission, Demo
 

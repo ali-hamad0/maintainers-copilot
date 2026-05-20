@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Demo Host — Maintainer's Copilot</title>
+    <title>Demo Host — Maintainer's Copilot (ALLOWED)</title>
     <style>
       body {
         font-family: system-ui, sans-serif;
@@ -14,27 +14,48 @@
       }
       h1 { font-size: 2rem; margin-bottom: 0.25em; }
       p { color: #555; line-height: 1.6; }
-      code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+      code {
+        background: #f4f4f4;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+      .allowed-badge {
+        display: inline-block;
+        background: #d4edda;
+        color: #155724;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 0.85em;
+        margin-bottom: 12px;
+      }
     </style>
   </head>
   <body>
+    <span class="allowed-badge">✅ ALLOWED ORIGIN — widget should load</span>
     <h1>Maintainer's Copilot — Demo Host</h1>
     <p>
-      This page simulates an external host site that embeds the Copilot widget.
-      The widget is served from <code>http://localhost:3000</code> and will appear
-      in the bottom-right corner once it is allowed by the CORS origin allowlist
-      stored in Postgres.
+      This page is served from <code>http://localhost:8080</code>, which is listed
+      in the widget config's <code>allowed_origins</code> field in Postgres.
+      The Copilot chat bubble appears in the bottom-right corner.
     </p>
     <p>
-      To test origin blocking: load this page from a host <em>not</em> in
-      <code>widget_config.allowed_origins</code> and confirm the widget is blocked
-      in the browser console.
+      To test origin blocking: open
+      <a href="http://localhost:8090/blocked.html">http://localhost:8090/blocked.html</a>
+      and confirm the widget is blocked in the browser console
+      (<em>CORS policy: No 'Access-Control-Allow-Origin' header</em>).
+    </p>
+    <p>
+      The CORS allowlist is read from the <code>widget_config</code> table in Postgres
+      on every request (30-second TTL cache). No hardcoded env var is used.
     </p>
 
-    <!-- Widget embed: replace src with the actual bundle URL from the widget service -->
+    <!-- API base URL injected before the widget bundle loads -->
     <script>
       window.__COPILOT_API_BASE__ = "http://localhost:8000";
     </script>
-    <script type="module" src="http://localhost:3000/src/main.jsx"></script>
+    <!-- Built widget bundle served by the widget nginx container -->
+    <script type="module" src="http://localhost:3000/assets/index.js"></script>
   </body>
 </html>

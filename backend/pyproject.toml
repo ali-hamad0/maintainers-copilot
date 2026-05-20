@@ -94,7 +94,11 @@ warn_unused_ignores = true
 warn_no_return = true
 
 [[tool.mypy.overrides]]
-module = ["structlog.*", "langsmith.*", "google.*", "redis", "redis.*", "sklearn.*", "minio.*"]
+module = [
+    "structlog.*", "langsmith.*", "google.*",
+    "redis", "redis.*", "sklearn.*", "minio.*",
+    "cachetools", "cachetools.*",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
