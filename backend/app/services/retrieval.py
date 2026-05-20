@@ -14,6 +14,7 @@ NO retrieval logic lives outside this module.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -34,7 +35,8 @@ _GEMINI_GENERATE_URL = (
 
 
 def _load_hyde_prompt() -> str:
-    with open("prompts/hyde_expansion.md") as fh:
+    path = Path(__file__).resolve().parents[2] / "prompts" / "hyde_expansion.md"
+    with open(path) as fh:
         return fh.read()
 
 

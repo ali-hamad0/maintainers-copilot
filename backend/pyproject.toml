@@ -33,7 +33,7 @@ dependencies = [
     "redis==5.0.1",
     "minio==7.2.3",
     "google-genai==0.3.0",
-    "langsmith==0.1.77",
+    "langsmith>=0.1.99",
     "cachetools==5.3.2",
     "pyyaml==6.0.1",
     "scikit-learn==1.4.0",

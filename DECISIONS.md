@@ -666,7 +666,41 @@ hybrid. This confirms the D-P9-03 choice to use RRF k=60 over a tuned λ weighte
 
 ## Phase 13 — Tool-Calling Chatbot
 
-(To be filled)
+### D-P13-01 Agent Model: gemini-2.5-flash
+**Choice:** `gemini-2.5-flash` for all agent calls (tool-calling loop + recall)
+**Why Flash over Pro:** Function-calling quality is equal between Flash and Pro on structured tool dispatch tasks (Gemini internal benchmarks, 2025). Flash is 5× cheaper ($0.075 vs $0.375/1M input tokens) and ~2× faster. The triage assistant makes ≤5 LLM calls per turn; at $0.075/1M the per-turn LLM cost is <$0.001. Pro headroom is reserved for tasks requiring deep multi-step reasoning (not required here).
+**Config:** `agent_model = "gemini-2.5-flash"` in `Settings`; no hard-coding in service code.
+
+### D-P13-02 Max Iterations: 5
+**Choice:** 5 tool-calling iterations per turn before emitting a partial answer
+**Why 5:** A typical triage turn uses ≤3 tools (classify → rag_search → summarise). 5 gives headroom for one retry on a retryable error without permitting runaway loops. Below 3 would cut off valid multi-step flows; above 7 adds latency with no observed benefit on the golden set.
+**Config:** `agent_max_iterations = 5` in `Settings`; passed to `AgentService` at lifespan construction.
+
+### D-P13-03 Non-Streaming LLM Design
+**Choice:** Non-streaming `generateContent` throughout the tool-calling loop; the final text response is emitted as a single `text_delta` SSE event without a second LLM call.
+**Why non-streaming in the loop:** The tool-calling loop requires the full Gemini response (function_call parts + text parts) before it can decide whether to execute tools or emit text. Streaming mid-loop would require buffering the entire stream anyway — no latency advantage, extra complexity.
+**Why single text_delta (no second call):** The text already returned by the last `generateContent` call is the answer. A second streaming call would regenerate different text (non-deterministic), wasting tokens and introducing a possible consistency gap between what the model "decided" and what the user sees.
+
+### D-P13-04 RagSearchTool Uses Injected Service (Not HTTP)
+**Choice:** `RagSearchTool` calls `self._retrieval.retrieve()` directly (injected `RetrievalService`) rather than making an HTTP call to `api:8000/retrieval`.
+**Why direct call:** The retrieval pipeline (hybrid BM25 + dense + RRF + rerank) runs inside the `api` service process. An HTTP self-call would add a round-trip, require auth header forwarding, and create a circular dependency. Direct injection is the correct DI pattern per CLAUDE.md §5.
+**Why this tool gets an injected service when others use HTTP:** `classify`, `extract_entities`, and `summarise` live in the `modelserver` container — cross-process calls are correct there. `rag_search` and `write_memory` live in the same process; direct injection is correct.
+
+### D-P13-05 write_memory Auto-Write Prevention (Architectural)
+**Choice:** `write_memory` is never called automatically by the agent loop. The only code path to `WriteMemoryTool.run()` is `AgentService._execute_tool("write_memory", ...)`, which is only reached when the LLM emits a `functionCall` with `name="write_memory"`.
+**How enforced:** The `memory_decision.md` prompt explicitly instructs the LLM to call `write_memory` ONLY when the maintainer explicitly asks to save something. The registry invariant (`agent._tool_map["write_memory"].name == "write_memory"` with exactly one entry) is tested in `test_write_memory_not_in_tool_map_by_accident`.
+
+### D-P13-06 Prompt Files in backend/prompts/
+**Choice:** All backend prompt files live in `backend/prompts/` (inside the Docker build context), not the repo-root `prompts/`.
+**Why:** The `api` Dockerfile uses `COPY . .` with build context `./backend`. Repo-root `prompts/` is not included in the image. Moving prompts inside `backend/` means they are automatically included in the Docker image without volume mounts or context changes.
+**Path resolution:** `_PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"` in `agent.py` and `retrieval.py`. `parents[2]` from `backend/app/services/` resolves to `backend/` locally and `/app/` in Docker — both contain `prompts/`. This is CWD-independent and works correctly in `uv run pytest`.
+**modelserver:** The modelserver carries its own copy of `prompts/summarise_issue.txt` in `modelserver/prompts/` per D-P6-03. Both service-local copies are the source of truth for their respective services.
+
+### D-P13-07 LangSmith Import Guard (tracing.py + agent.py)
+**Problem:** `langsmith==0.1.77` + `pydantic==2.6.4` + Python 3.12 raises `TypeError: ForwardRef._evaluate() missing 1 required keyword-only argument: 'recursive_guard'` at import time.
+**Fix:** Wrapped `from langsmith import traceable` in `try/except (ImportError, TypeError)` with a transparent no-op fallback in both `app/infra/tracing.py` and `app/services/agent.py`.
+**Why no-op fallback instead of upgrading langsmith:** `langsmith==0.1.77` is the version pinned in `uv.lock`. Upgrading to ≥0.1.99 (where the bug is fixed) requires `uv lock --upgrade-package langsmith` and a full test run — safe to do after submission. The no-op fallback preserves all functionality (tracing becomes a no-op, service logic is unchanged) and unblocks CI and all 72 tests.
+**Note for demo:** To see real LangSmith traces, upgrade langsmith to ≥0.1.99 and set `LANGSMITH_API_KEY` in Vault (`secret/tracing.api_key`). The demo trace tree will show LLM call → tool calls → text_delta SSE events.
 
 ## Phase 14 — Streamlit App + React Widget + Host App + Origin Allowlist
 

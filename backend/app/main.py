@@ -1,6 +1,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import httpx
 import redis.asyncio as aioredis
 import structlog
 from fastapi import FastAPI
@@ -8,8 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app import bootcheck
 from app.api.auth_router import router as auth_router
+from app.api.chat_router import router as chat_router
 from app.api.errors import register_exception_handlers
-from app.api.middleware import RequestIDMiddleware
+from app.api.memories_router import router as memories_router
+from app.api.middleware import CORSFromDBMiddleware, RequestIDMiddleware
+from app.api.widget_router import router as widget_router
 from app.config import get_settings
 from app.infra.embedder import Embedder
 from app.infra.logging_setup import configure_logging
@@ -17,7 +21,13 @@ from app.infra.reranker import Reranker
 from app.infra.tracing import configure_tracing, emit_startup_span
 from app.infra.vault import load_secrets
 from app.repositories.chunk_repo import ChunkRepo
+from app.services.agent import AgentService
 from app.services.retrieval import RetrievalService
+from app.tools.classify import ClassifyTool
+from app.tools.extract_entities import ExtractEntitiesTool
+from app.tools.rag_search import RagSearchTool
+from app.tools.summarise import SummariseTool
+from app.tools.write_memory import WriteMemoryTool
 
 log = structlog.get_logger(__name__)
 
@@ -92,11 +102,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.retrieval = retrieval_svc
     log.info("retrieval.service_ready", rrf_k=settings.hybrid_rrf_k)
 
+    # 10. Tool-calling agent — ONE registry, ONE loop (Phase 13).
+    modelserver_url = settings.modelserver_base_url
+    shared_http = httpx.AsyncClient(timeout=httpx.Timeout(30.0))
+    agent = AgentService(
+        gemini_api_key=secrets.gemini_api_key,
+        model=settings.agent_model,
+        max_iterations=settings.agent_max_iterations,
+        classify_tool=ClassifyTool(shared_http, modelserver_url),
+        extract_entities_tool=ExtractEntitiesTool(shared_http, modelserver_url),
+        summarise_tool=SummariseTool(shared_http, modelserver_url),
+        rag_search_tool=RagSearchTool(retrieval_svc),
+        write_memory_tool=WriteMemoryTool(embedder),
+        embedder=embedder,
+    )
+    app.state.agent = agent
+    log.info("agent.ready", model=settings.agent_model, max_iter=settings.agent_max_iterations)
+
     log.info("api.started")
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
     log.info("api.shutting_down")
+    await agent.close()
+    await shared_http.aclose()
     await retrieval_svc.close()
     await reranker.close()
     await embedder.close()
@@ -113,15 +142,26 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Middleware runs outermost-first; RequestIDMiddleware must wrap everything
-    # so request_id is bound before any route or exception handler runs.
+    # Middleware runs outermost-first.
+    # RequestIDMiddleware must be innermost so request_id is bound first.
+    # CORSFromDBMiddleware wraps everything so CORS headers appear on all responses.
     app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(CORSFromDBMiddleware)
 
     # Register the unified exception handler (CLAUDE.md §5 Errors).
     register_exception_handlers(app)
 
     # Auth + Users routes (Phase 12).
     app.include_router(auth_router)
+
+    # Chat endpoint (Phase 13).
+    app.include_router(chat_router)
+
+    # Widget config + embed endpoint (Phase 14).
+    app.include_router(widget_router)
+
+    # Long-term memory inspector (Phase 14).
+    app.include_router(memories_router)
 
     @app.get("/healthz", tags=["ops"])
     async def healthz() -> dict[str, str]:

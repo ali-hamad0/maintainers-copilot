@@ -12,7 +12,20 @@ import os
 from typing import Any
 
 import structlog
-from langsmith import traceable
+
+# langsmith==0.1.77 has a pydantic.v1/Python 3.12 forward-ref incompatibility
+# that raises TypeError at import time in some environments (noted in Phase 11
+# project memory).  Fall back to a transparent no-op so the service and tests
+# work cleanly when LangSmith is not available or misconfigured.
+try:
+    from langsmith import traceable
+except (ImportError, TypeError):
+
+    def traceable(_name: str | None = None, **_kwargs: Any) -> Any:  # type: ignore[no-redef]
+        def _inner(fn: Any) -> Any:
+            return fn
+
+        return _inner
 
 from app.infra.redaction import redact_dict
 
