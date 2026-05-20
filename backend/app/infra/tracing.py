@@ -27,6 +27,7 @@ except (ImportError, TypeError):
 
         return _inner
 
+
 from app.infra.redaction import redact_dict
 
 log = structlog.get_logger(__name__)

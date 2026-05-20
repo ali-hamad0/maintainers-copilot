@@ -39,6 +39,7 @@ except (ImportError, TypeError):
 
         return _inner
 
+
 from app.domain.tool_result import ToolError
 from app.infra.embedder import Embedder
 from app.infra.tracing import sanitise_span_inputs
